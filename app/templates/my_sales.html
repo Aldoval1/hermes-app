@@ -1,0 +1,53 @@
+{% extends "dashboard_base.html" %}
+
+{% block dashboard_content %}
+<h1>Historial de Mis Ventas</h1>
+
+<div class="sales-container">
+    <div class="sales-header">
+        <div class="header-item">Producto Vendido</div>
+        <div class="header-item">Cantidad</div>
+        <div class="header-item">Ganancia</div>
+        <div class="header-item">Cliente</div>
+        <div class="header-item">Fecha de Pedido</div>
+    </div>
+    {% for sale in sales %}
+    <div class="sale-item">
+        <div class="sale-detail">{{ sale.product.name }}</div>
+        <div class="sale-detail">x{{ sale.quantity }}</div>
+        <div class="sale-detail profit">${{ "%.2f"|format(sale.price_per_item * sale.quantity) }}</div>
+        <div class="sale-detail">{{ sale.order.customer.username }}</div>
+        <div class="sale-detail">{{ sale.order.order_date.strftime('%d/%m/%Y %H:%M') }}</div>
+    </div>
+    {% else %}
+    <p>Aún no has realizado ninguna venta.</p>
+    {% endfor %}
+</div>
+
+<style>
+    .sales-container {
+        background-color: rgba(0,0,0,0.2);
+        padding: 20px;
+        border-radius: 10px;
+    }
+    .sales-header, .sale-item {
+        display: grid;
+        grid-template-columns: 2fr 1fr 1fr 1fr 2fr;
+        gap: 15px;
+        align-items: center;
+        padding: 10px 15px;
+        border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+    .sales-header {
+        font-weight: bold;
+        color: #00aaff;
+    }
+    .sale-item:last-child {
+        border-bottom: none;
+    }
+    .sale-detail.profit {
+        color: #28a745;
+        font-weight: bold;
+    }
+</style>
+{% endblock %}

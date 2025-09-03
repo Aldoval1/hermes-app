@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    .register-container {
+        background-color: rgba(0, 0, 0, 0.4);
+        padding: 40px;
+        border-radius: 15px;
+        box-shadow: 0 0 20px rgba(76, 73, 128, 0.5);
+        width: 100%;
+        max-width: 400px;
+        text-align: center;
+    }
+    h1 {
+        color: #6c63ff;
+        margin-bottom: 20px;
+    }
+    form p {
+        margin-bottom: 15px;
+    }
+    label {
+        display: block;
+        margin-bottom: 5px;
+        text-align: left;
+    }
+    input, select {
+        width: 100%;
+        padding: 10px;
+        border-radius: 5px;
+        border: 1px solid #6c63ff;
+        background-color: #333;
+        color: white;
+        box-sizing: border-box;
+    }
+    input[type="submit"] {
+        background-color: #6c63ff;
+        cursor: pointer;
+        font-weight: bold;
+        margin-top: 10px;
+    }
+    .login-link {
+        margin-top: 20px;
+    }
+    .login-link a {
+        color: #00aaff;
+        text-decoration: none;
+    }
+    .login-link a:hover {
+        text-decoration: underline;
+    }
+</style>
+
+<div class="register-container">
+    <h1>Registrarse en Hermes</h1>
+    <form action="" method="post" novalidate>
+        {{ form.hidden_tag() }}
+        <p>
+            {{ form.username.label }}<br>
+            {{ form.username(size=32) }}
+        </p>
+        <p>
+            {{ form.password.label }}<br>
+            {{ form.password(size=32) }}
+        </p>
+        <p>
+            {{ form.password2.label }}<br>
+            {{ form.password2(size=32) }}
+        </p>
+         <p>
+            {{ form.discord.label }}<br>
+            {{ form.discord(size=32) }}
+        </p>
+        <p>
+            {{ form.role.label }}<br>
+            {{ form.role() }}
+        </p>
+        <p>{{ form.submit() }}</p>
+    </form>
+    <p class="login-link">¿Ya tienes una cuenta? <a href="{{ url_for('main.login') }}">Inicia sesión</a></p>
+</div>
+{% endblock %}

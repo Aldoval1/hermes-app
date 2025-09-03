@@ -1,0 +1,85 @@
+{% extends "dashboard_base.html" %}
+
+{% block dashboard_content %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+<h1>Gestionar Pedidos de Clientes</h1>
+
+<div class="orders-container">
+    {% for order in orders %}
+    <div class="order-card">
+        <div class="order-header">
+            <h3>Pedido #{{ order.id }} - <span class="status-{{ order.status.lower().replace(' ', '-') }}">{{ order.status }}</span></h3>
+            <p><strong>Cliente:</strong> {{ order.customer.username }} | <strong>Fecha:</strong> {{ order.order_date.strftime('%d/%m/%Y') }}</p>
+        </div>
+        <div class="order-body">
+            <div class="order-details">
+                <h4>Productos Comprados</h4>
+                <ul>
+                    {% for item in order.items %}
+                    <li>{{ item.product.name }} (x{{ item.quantity }})</li>
+                    {% endfor %}
+                </ul>
+                <hr>
+                <p><strong>Palabra Clave:</strong> {{ order.keyword }}</p>
+                <p><strong>Fecha/Hora Entrega:</strong> {{ order.delivery_datetime }}</p>
+                <p><strong>Total Pagado:</strong> ${{ "%.2f"|format(order.total_price) }}</p>
+                <p><strong>Detalles Extra:</strong> {{ order.extra_details or 'Ninguno' }}</p>
+            </div>
+            <div class="order-map" id="map-{{ order.id }}" data-lat="{{ order.delivery_location_x }}" data-lon="{{ order.delivery_location_y }}"></div>
+        </div>
+        <div class="order-actions">
+            <form action="{{ url_for('main.update_order_status', order_id=order.id) }}" method="POST">
+                <select name="status">
+                    <option value="Procesando" {% if order.status == 'Procesando' %}selected{% endif %}>Procesando</option>
+                    <option value="En Camino" {% if order.status == 'En Camino' %}selected{% endif %}>En Camino</option>
+                    <option value="Entregado" {% if order.status == 'Entregado' %}selected{% endif %}>Entregado</option>
+                </select>
+                <button type="submit">Actualizar Estado</button>
+            </form>
+        </div>
+    </div>
+    {% else %}
+    <p>No hay pedidos para mostrar.</p>
+    {% endfor %}
+</div>
+
+<style>
+    .order-card { background-color: rgba(0,0,0,0.2); border-radius: 10px; margin-bottom: 20px; }
+    .order-header { padding: 15px 20px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+    .order-header h3 { margin: 0; }
+    .order-header p { margin: 5px 0 0; color: #ccc; }
+    .order-body { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding: 20px; }
+    .order-map { height: 250px; border-radius: 5px; }
+    .order-actions { padding: 15px 20px; background-color: rgba(0,0,0,0.1); border-top: 1px solid rgba(255,255,255,0.1); text-align: right; }
+    .order-actions select, .order-actions button { padding: 8px 12px; border-radius: 5px; border: 1px solid #6c63ff; background-color: #333; color: white; }
+    .order-actions button { background-color: #6c63ff; cursor: pointer; margin-left: 10px; }
+    .status-procesando { color: #ffc107; }
+    .status-en-camino { color: #00aaff; }
+    .status-entregado { color: #28a745; }
+</style>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        var mapElements = document.querySelectorAll('.order-map');
+        var mapImage = "{{ url_for('static', filename='img/mi_mapa.png') }}";
+        var bounds = [[-1000, -1000], [1000, 1000]];
+
+        mapElements.forEach(function(mapEl) {
+            var lat = mapEl.dataset.lat;
+            var lon = mapEl.dataset.lon;
+
+            if (lat && lon) {
+                var map = L.map(mapEl.id, { crs: L.CRS.Simple, minZoom: -2, zoomControl: false, attributionControl: false });
+                L.imageOverlay(mapImage, bounds).addTo(map);
+                var latLng = L.latLng(lat, lon);
+                L.marker(latLng).addTo(map);
+                map.setView(latLng, 0);
+            } else {
+                mapEl.innerHTML = '<p style="text-align:center; color:#888;">Ubicación no especificada.</p>';
+            }
+        });
+    });
+</script>
+{% endblock %}

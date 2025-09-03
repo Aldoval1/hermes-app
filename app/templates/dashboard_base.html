@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Hermes - {{ title }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        body { display: flex; background: linear-gradient(135deg, #0f0c29, #302b63, #24243e); color: white; margin: 0; font-family: sans-serif; }
+        .main-container { display: flex; width: 100%; position: relative; }
+        .sidebar { width: 250px; background-color: rgba(0,0,0,0.3); padding: 20px; height: 100vh; flex-shrink: 0; display: flex; flex-direction: column; box-sizing: border-box; }
+        .sidebar h2 { color: #00aaff; }
+        .sidebar a { display: block; color: white; padding: 10px; text-decoration: none; border-radius: 5px; margin-bottom: 5px;}
+        .sidebar a:hover { background-color: #6c63ff; }
+        .content { flex-grow: 1; padding: 20px; overflow-y: auto; height: 100vh; box-sizing: border-box; }
+        .cart-sidebar { width: 300px; background-color: rgba(0,0,0,0.2); padding: 20px; height: 100vh; flex-shrink: 0; box-sizing: border-box;}
+        .cart-item { display: flex; align-items: center; margin-bottom: 15px; background-color: rgba(0,0,0,0.4); padding: 10px; border-radius: 5px;}
+        .cart-item img { width: 50px; height: 50px; border-radius: 5px; margin-right: 10px; object-fit: cover;}
+        .cart-item-info { flex-grow: 1; }
+        .cart-item-actions { display: flex; align-items: center; justify-content: space-between; }
+        .cart-item-actions form { display: inline; }
+        .cart-item-actions button { background: none; border: none; color: #00aaff; font-size: 1.2em; padding: 0 8px; cursor: pointer; }
+        .sidebar .logout-link { margin-top: auto; color: #ff6b6b; }
+
+        .user-info {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background-color: rgba(0,0,0,0.4);
+            padding: 10px 15px;
+            border-radius: 10px;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        {% if current_user.is_authenticated and (current_user.role == 'cliente' or current_user.role == 'vendedor') %}
+        <div class="user-info">
+            <span>{{ current_user.username }}</span> | <span>${{ "%.2f"|format(current_user.balance) }}</span>
+        </div>
+        {% endif %}
+
+        <div class="sidebar">
+            <div>
+                <h2>Hermes</h2>
+                {% if current_user.role == 'cliente' %}
+                    <a href="{{ url_for('main.index') }}">Tienda</a>
+                    <a href="{{ url_for('main.my_orders') }}">Mis Pedidos</a>
+                {% endif %}
+
+                {% if current_user.role == 'vendedor' %}
+                    <a href="{{ url_for('main.vendedor_dashboard') }}">Mis Productos</a>
+                    <a href="{{ url_for('main.my_sales') }}">Mis Ventas</a>
+                {% endif %}
+
+                {% if current_user.role == 'admin' %}
+                    <a href="{{ url_for('main.admin_dashboard') }}">Gestionar Productos</a>
+                    <a href="{{ url_for('main.admin_manage_users') }}">Gestionar Usuarios</a>
+                    <a href="{{ url_for('main.admin_manage_orders') }}">Ver Pedidos</a>
+                {% endif %}
+            </div>
+            <a href="{{ url_for('main.logout') }}" class="logout-link">Cerrar Sesión</a>
+        </div>
+
+        <div class="content">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                <p style="background-color: {% if category == 'success' %}#28a745{% elif category == 'error' %}#dc3545{% else %}#6c63ff{% endif %}; padding: 10px; border-radius: 5px;">{{ message }}</p>
+                {% endfor %}
+            {% endif %}
+            {% endwith %}
+            {% block dashboard_content %}{% endblock %}
+        </div>
+
+        {% if session.get('cart') and current_user.role == 'cliente' %}
+        <div class="cart-sidebar">
+            <h3>🛒 Carrito de Compras</h3>
+            {% for item_id, item_data in cart_items.items() %}
+            <div class="cart-item">
+                <img src="{{ url_for('static', filename='img/' + item_data.product.image_file) }}" alt="{{ item_data.product.name }}">
+                <div class="cart-item-info">
+                    <strong>{{ item_data.product.name }}</strong>
+                    <div class="cart-item-actions">
+                        <form action="{{ url_for('main.update_cart', product_id=item_id) }}" method="post" style="display:inline;">
+                            <input type="hidden" name="action" value="subtract">
+                            <button type="submit">-</button>
+                        </form>
+                        <span>{{ item_data.quantity }}</span>
+                         <form action="{{ url_for('main.update_cart', product_id=item_id) }}" method="post" style="display:inline;">
+                            <input type="hidden" name="action" value="add">
+                            <button type="submit">+</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+            <a href="{{ url_for('main.checkout') }}" style="display: block; width: 100%; text-align: center; padding: 10px; background-color: #00aaff; color: white; border: none; border-radius: 5px; text-decoration: none; margin-top: 15px;">Proceder a la Compra</a>
+        </div>
+        {% endif %}
+    </div>
+</body>
+</html>

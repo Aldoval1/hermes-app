@@ -1,0 +1,53 @@
+{% extends "dashboard_base.html" %}
+
+{% block dashboard_content %}
+    <div class="vendedor-header">
+        <h1>Mis Productos</h1>
+        <a href="{{ url_for('main.add_product') }}" class="add-product-btn">Añadir Nuevo Producto</a>
+    </div>
+
+    <div class="product-list-container">
+         <div class="product-list-header">
+            <div class="product-image">Imagen</div>
+            <div class="product-name">Nombre</div>
+            <div class="product-price">Precio</div>
+            <div class="product-stock">Stock</div>
+            <div class="product-status">Estado</div>
+            <div class="product-actions">Acciones</div>
+        </div>
+        {% for product in products %}
+        <div class="product-list-item">
+            <div class="product-image"><img src="{{ url_for('static', filename='img/' + product.image_file) }}" alt="{{ product.name }}"></div>
+            <div class="product-name">{{ product.name }}</div>
+            <div class="product-price">${{ "%.2f"|format(product.price) }}</div>
+            <div class="product-stock">{{ product.stock }}</div>
+            <div class="product-status">
+                 <span class="status-{{ product.status }}">{{ product.status.capitalize() }}</span>
+            </div>
+            <div class="product-actions">
+                <a href="{{ url_for('main.edit_product', product_id=product.id) }}" class="btn-edit">Editar</a>
+                <form action="{{ url_for('main.delete_product', product_id=product.id) }}" method="POST" onsubmit="return confirm('¿Estás seguro de que quieres eliminar este producto?');" style="display:inline;">
+                    <button type="submit" class="btn-delete">Eliminar</button>
+                </form>
+            </div>
+        </div>
+        {% else %}
+        <p style="text-align: center; padding: 20px;">No tienes ningún producto a la venta. ¡Añade uno!</p>
+        {% endfor %}
+    </div>
+
+    <style>
+        .vendedor-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .add-product-btn { background-color: #28a745; color: white; padding: 10px 15px; border-radius: 5px; text-decoration: none; }
+        .product-list-container { background-color: rgba(0,0,0,0.2); border-radius: 10px; }
+        .product-list-header, .product-list-item { display: grid; grid-template-columns: 100px 2fr 1fr 1fr 1fr 1.5fr; gap: 15px; align-items: center; padding: 15px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        .product-list-header { font-weight: bold; color: #00aaff; }
+        .product-list-item:last-child { border-bottom: none; }
+        .product-image img { width: 70px; height: 70px; border-radius: 5px; object-fit: cover; }
+        .status-pendiente { background-color: #ffc107; color: #333; padding: 5px 10px; border-radius: 15px; font-size: 0.9em; }
+        .status-aprobado { background-color: #28a745; color: white; padding: 5px 10px; border-radius: 15px; font-size: 0.9em; }
+        .btn-edit, .btn-delete { color: white; padding: 8px 12px; border-radius: 5px; text-decoration: none; border: none; cursor: pointer; }
+        .btn-edit { background-color: #007bff; }
+        .btn-delete { background-color: #dc3545; }
+    </style>
+{% endblock %}
