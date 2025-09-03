@@ -207,13 +207,12 @@ def checkout():
         return redirect(url_for('main.index'))
 
     return render_template('checkout.html', title='Finalizar Compra', cart_items=cart_items, final_price=final_price)
-
+    
 @bp.route('/my_orders')
 @login_required
 def my_orders():
     if current_user.role != 'cliente':
         return redirect(url_for('main.index'))
-    
     orders = Order.query.filter_by(customer=current_user).order_by(Order.order_date.desc()).all()
     cart_items = get_cart_items()
     return render_template('my_orders.html', title='Mis Pedidos', orders=orders, cart_items=cart_items)
@@ -228,19 +227,6 @@ def vendedor_dashboard():
     products = Product.query.filter_by(seller=current_user).order_by(Product.id.desc()).all()
     cart_items = get_cart_items()
     return render_template('vendedor_dashboard.html', title='Panel de Vendedor', products=products, cart_items=cart_items)
-
-# --- NUEVA RUTA PARA "MIS VENTAS" ---
-@bp.route('/my_sales')
-@login_required
-def my_sales():
-    if current_user.role != 'vendedor':
-        return redirect(url_for('main.index'))
-    
-    # Consulta para obtener los items de productos vendidos por el usuario actual
-    sales = db.session.query(OrderItem).join(Product).filter(Product.user_id == current_user.id).order_by(OrderItem.id.desc()).all()
-    
-    cart_items = get_cart_items()
-    return render_template('my_sales.html', title='Mis Ventas', sales=sales, cart_items=cart_items)
 
 @bp.route('/vendedor/add_product', methods=['GET', 'POST'])
 @login_required
@@ -306,8 +292,7 @@ def edit_product(product_id):
     if product.meetup_datetime:
         form.meetup_date.data = product.meetup_datetime.date()
         form.meetup_time.data = product.meetup_datetime.time()
-    if product.meetup_location_x is not None:
-        form.meetup_location.data = f"{product.meetup_location_x},{product.meetup_location_y}"
+    form.meetup_location.data = f"{product.meetup_location_x},{product.meetup_location_y}" if product.meetup_location_x is not None else ''
 
     cart_items = get_cart_items()
     return render_template('edit_product.html', title='Editar Producto', form=form, product=product, cart_items=cart_items)
@@ -322,6 +307,18 @@ def delete_product(product_id):
     db.session.commit()
     flash('Producto eliminado con éxito.', 'success')
     return redirect(url_for('main.vendedor_dashboard'))
+    
+@bp.route('/my_sales')
+@login_required
+def my_sales():
+    if current_user.role != 'vendedor':
+        return redirect(url_for('main.index'))
+    
+    # Buscamos los items de órdenes que pertenecen a productos de este vendedor
+    sold_items = db.session.query(OrderItem).join(Product).filter(Product.user_id == current_user.id).all()
+    
+    cart_items = get_cart_items()
+    return render_template('my_sales.html', title='Mis Ventas', sold_items=sold_items, cart_items=cart_items)
 
 # --- Rutas del Administrador ---
 @bp.route('/admin/dashboard')
@@ -329,7 +326,7 @@ def delete_product(product_id):
 def admin_dashboard():
     if current_user.role != 'admin':
         return redirect(url_for('main.index'))
-    pending_products = Product.query.filter_by(status='pendiente').order_by(Product.id.desc()).all()
+    pending_products = Product.query.filter_by(status='pendiente').all()
     cart_items = get_cart_items()
     return render_template('admin_dashboard.html', title='Panel de Admin', products=pending_products, cart_items=cart_items)
 
@@ -393,18 +390,18 @@ def reject_product(product_id):
     flash(f'Producto "{product.name}" ha sido rechazado y eliminado.', 'success')
     return redirect(url_for('main.admin_dashboard'))
 
-@bp.route('/admin/orders')
+@bp.route('/admin/manage_orders')
 @login_required
 def admin_manage_orders():
     if current_user.role != 'admin':
         return redirect(url_for('main.index'))
     orders = Order.query.order_by(Order.order_date.desc()).all()
     cart_items = get_cart_items()
-    return render_template('admin_manage_orders.html', title="Gestionar Pedidos", orders=orders, cart_items=cart_items)
+    return render_template('admin_manage_orders.html', title='Gestionar Pedidos', orders=orders, cart_items=cart_items)
 
 @bp.route('/admin/update_order_status/<int:order_id>', methods=['POST'])
 @login_required
-def update_order_status(order_id):
+def admin_update_order_status(order_id):
     if current_user.role != 'admin':
         return redirect(url_for('main.index'))
     order = Order.query.get_or_404(order_id)
@@ -412,7 +409,24 @@ def update_order_status(order_id):
     if new_status in ['Procesando', 'En Camino', 'Entregado']:
         order.status = new_status
         db.session.commit()
-        flash(f"El estado del pedido #{order.id} ha sido actualizado a '{new_status}'.", 'success')
+        flash(f'El estado del pedido #{order.id} ha sido actualizado a "{new_status}".', 'success')
     else:
-        flash("Estado inválido.", 'error')
+        flash('Estado no válido.', 'error')
     return redirect(url_for('main.admin_manage_orders'))
+
+# --- RUTA SECRETA PARA CREAR UN ADMINISTRADOR ---
+# Para usarla: visita https://tu-dominio.up.railway.app/make-admin/nombredeusuario/clave-secreta
+@bp.route('/make-admin/<username>/<secret_key>')
+def make_admin(username, secret_key):
+    # Esta es una clave simple para evitar que cualquiera use la ruta.
+    # Cámbiala por algo que solo tú sepas.
+    if secret_key == 'hermes-dev-power':
+        user = User.query.filter_by(username=username).first()
+        if user:
+            user.role = 'admin'
+            db.session.commit()
+            return f"<h1>Éxito</h1><p>El usuario '{username}' ahora es un administrador.</p>"
+        else:
+            return f"<h1>Error</h1><p>No se encontró al usuario '{username}'.</p>"
+    else:
+        return "<h1>Acceso Denegado</h1><p>Clave secreta incorrecta.</p>", 403
