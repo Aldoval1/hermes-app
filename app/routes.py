@@ -1,8 +1,8 @@
 import os
 from flask import render_template, flash, redirect, url_for, request, current_app
 from app import db
-from app.forms import LoginForm, RegistrationForm, OfficialLoginForm, OfficialRegistrationForm, SearchUserForm, CriminalRecordForm, TrafficFineForm, PoliceReportForm
-from app.models import User, PoliceReport, TrafficFine, License, CriminalRecord
+from app.forms import LoginForm, RegistrationForm, OfficialLoginForm, OfficialRegistrationForm, SearchUserForm, CriminalRecordForm, TrafficFineForm, CommentForm
+from app.models import User, Comment, TrafficFine, License, CriminalRecord, CriminalRecordSubjectPhoto, CriminalRecordEvidencePhoto
 from flask_login import current_user, login_user, logout_user, login_required
 from flask import Blueprint
 from werkzeug.utils import secure_filename
@@ -192,11 +192,7 @@ def official_database():
     if form.query.data:
         query = form.query.data
         users = User.query.filter(
-            (User.badge_id == None) & # Only citizens? Or anyone? Let's search all, maybe official looks for official?
-            # Prompt says "usuarios registrados". Usually police look for citizens.
-            # I will filter users that are NOT currently 'Aprobado' officials? Or just anyone?
-            # A citizen can be official too?
-            # Let's just search all users.
+            (User.badge_id == None) &
             (
                 User.first_name.contains(query) |
                 User.last_name.contains(query) |
@@ -214,45 +210,41 @@ def citizen_profile(user_id):
 
     citizen = User.query.get_or_404(user_id)
 
-    # Permissions
-    can_edit = current_user.department in ['Policia', 'Sheriff', 'LSFD'] # LSFD too? Prompt said "PD y Sherrif solo podra editar".
-    # Wait, "La PD y Sherrif solo podra editar...". What about LSFD?
-    # Prompt: "La PD y Sherrif solo podra editar el area de informes policiales, multas de trafico, detalles penales."
-    # So LSFD cannot.
-    can_edit = current_user.department in ['Policia', 'Sheriff']
+    # Permissions: SABES, Policia, Sheriff can add
+    can_edit = current_user.department in ['Policia', 'Sheriff', 'SABES']
 
     # Forms
-    report_form = PoliceReportForm()
+    comment_form = CommentForm()
     fine_form = TrafficFineForm()
     criminal_form = CriminalRecordForm()
 
     return render_template('citizen_profile.html', citizen=citizen, can_edit=can_edit,
-                           report_form=report_form, fine_form=fine_form, criminal_form=criminal_form)
+                           comment_form=comment_form, fine_form=fine_form, criminal_form=criminal_form)
 
-@bp.route('/official/citizen/<int:user_id>/add_report', methods=['POST'])
+@bp.route('/official/citizen/<int:user_id>/add_comment', methods=['POST'])
 @login_required
-def add_police_report(user_id):
-    if not current_user.badge_id or current_user.department not in ['Policia', 'Sheriff']:
+def add_comment(user_id):
+    if not current_user.badge_id or current_user.department not in ['Policia', 'Sheriff', 'SABES']:
         flash('No tienes permiso para realizar esta acción.')
         return redirect(url_for('main.citizen_profile', user_id=user_id))
 
-    form = PoliceReportForm()
+    form = CommentForm()
     if form.validate_on_submit():
-        report = PoliceReport(
+        comment = Comment(
             content=form.content.data,
             user_id=user_id,
             author_id=current_user.id
         )
-        db.session.add(report)
+        db.session.add(comment)
         db.session.commit()
-        flash('Informe agregado.')
+        flash('Comentario agregado.')
 
     return redirect(url_for('main.citizen_profile', user_id=user_id))
 
 @bp.route('/official/citizen/<int:user_id>/add_fine', methods=['POST'])
 @login_required
 def add_traffic_fine(user_id):
-    if not current_user.badge_id or current_user.department not in ['Policia', 'Sheriff']:
+    if not current_user.badge_id or current_user.department not in ['Policia', 'Sheriff', 'SABES']:
         flash('No tienes permiso para realizar esta acción.')
         return redirect(url_for('main.citizen_profile', user_id=user_id))
 
@@ -273,45 +265,43 @@ def add_traffic_fine(user_id):
 @bp.route('/official/citizen/<int:user_id>/add_criminal_record', methods=['POST'])
 @login_required
 def add_criminal_record(user_id):
-    if not current_user.badge_id or current_user.department not in ['Policia', 'Sheriff']:
+    if not current_user.badge_id or current_user.department not in ['Policia', 'Sheriff', 'SABES']:
         flash('No tienes permiso para realizar esta acción.')
         return redirect(url_for('main.citizen_profile', user_id=user_id))
 
     form = CriminalRecordForm()
     if form.validate_on_submit():
-        subject_photo = None
-        evidence_photo = None
-
-        if form.subject_photo.data:
-            f = form.subject_photo.data
-            filename = secure_filename(f.filename)
-            f.save(os.path.join(current_app.config['UPLOAD_FOLDER'], filename))
-            subject_photo = filename
-
-        if form.evidence_photo.data:
-            f = form.evidence_photo.data
-            filename = secure_filename(f.filename)
-            f.save(os.path.join(current_app.config['UPLOAD_FOLDER'], filename))
-            evidence_photo = filename
-
         record = CriminalRecord(
-            date=form.date.data, # Note: datetime vs date. Model has DateTime. form.date.data is date.
-            # Need to convert or let SQLAlchemy handle it? It usually handles it, but safer to combine with min time.
-            # Or change form to DateTimeField. DateField returns date object.
-            # datetime.combine(form.date.data, datetime.min.time())
+            date=form.date.data,
             crime=form.crime.data,
             penal_code=form.penal_code.data,
             report_text=form.report_text.data,
-            subject_photo=subject_photo,
-            evidence_photo=evidence_photo,
             user_id=user_id,
             author_id=current_user.id
         )
         db.session.add(record)
         db.session.commit()
+
+        # Handle multiple photos
+        if form.subject_photos.data:
+            for f in form.subject_photos.data:
+                if f and f.filename:
+                    filename = secure_filename(f.filename)
+                    f.save(os.path.join(current_app.config['UPLOAD_FOLDER'], filename))
+                    photo = CriminalRecordSubjectPhoto(filename=filename, record_id=record.id)
+                    db.session.add(photo)
+
+        if form.evidence_photos.data:
+             for f in form.evidence_photos.data:
+                if f and f.filename:
+                    filename = secure_filename(f.filename)
+                    f.save(os.path.join(current_app.config['UPLOAD_FOLDER'], filename))
+                    photo = CriminalRecordEvidencePhoto(filename=filename, record_id=record.id)
+                    db.session.add(photo)
+
+        db.session.commit()
         flash('Antecedente penal registrado.')
     else:
-        # Debug form errors
         for field, errors in form.errors.items():
             for error in errors:
                 flash(f"Error en {field}: {error}")

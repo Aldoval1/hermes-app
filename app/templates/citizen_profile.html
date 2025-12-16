@@ -296,15 +296,15 @@
 
     <!-- Modals (Only rendered if permission exists, or hidden) -->
     {% if can_edit %}
-    <!-- Report Modal -->
-    <div id="reportModal" class="modal">
+    <!-- Comment Modal -->
+    <div id="commentModal" class="modal">
         <div class="modal-content">
-            <span class="close" onclick="closeModal('reportModal')">&times;</span>
-            <h3>Nuevo Informe Policial</h3>
-            <form action="{{ url_for('main.add_police_report', user_id=citizen.id) }}" method="POST">
-                {{ report_form.hidden_tag() }}
-                {{ report_form.content(placeholder="Escriba el informe aquí...") }}
-                <button type="submit">Guardar Informe</button>
+            <span class="close" onclick="closeModal('commentModal')">&times;</span>
+            <h3>Nuevo Comentario</h3>
+            <form action="{{ url_for('main.add_comment', user_id=citizen.id) }}" method="POST">
+                {{ comment_form.hidden_tag() }}
+                {{ comment_form.content(placeholder="Escriba el comentario aquí...") }}
+                <button type="submit">Agregar Comentario</button>
             </form>
         </div>
     </div>
@@ -335,10 +335,10 @@
                 {{ criminal_form.crime(placeholder="Delito Cometido") }}
                 {{ criminal_form.penal_code(placeholder="Código Penal Infringido") }}
                 {{ criminal_form.report_text(placeholder="Informe Detallado") }}
-                <label>Foto del Sujeto</label>
-                {{ criminal_form.subject_photo() }}
-                <label>Evidencia Fotográfica</label>
-                {{ criminal_form.evidence_photo() }}
+                <label>Fotos del Sujeto (Selecciona varias)</label>
+                {{ criminal_form.subject_photos(multiple="multiple") }}
+                <label>Evidencia Fotográfica (Selecciona varias)</label>
+                {{ criminal_form.evidence_photos(multiple="multiple") }}
                 <button type="submit">Registrar Antecedente</button>
             </form>
         </div>

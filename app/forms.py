@@ -1,5 +1,5 @@
 from flask_wtf import FlaskForm
-from wtforms import StringField, PasswordField, SubmitField, BooleanField, SelectField, TextAreaField, FloatField, DateField
+from wtforms import StringField, PasswordField, SubmitField, BooleanField, SelectField, TextAreaField, FloatField, DateField, MultipleFileField
 from flask_wtf.file import FileField, FileRequired, FileAllowed
 from wtforms.validators import DataRequired, EqualTo
 
@@ -67,10 +67,10 @@ class CriminalRecordForm(FlaskForm):
     crime = StringField('Delito Cometido', validators=[DataRequired()])
     penal_code = StringField('Código Penal Infringido', validators=[DataRequired()])
     report_text = TextAreaField('Informe Detallado', validators=[DataRequired()])
-    subject_photo = FileField('Foto del Sujeto', validators=[
+    subject_photos = MultipleFileField('Fotos del Sujeto', validators=[
         FileAllowed(['jpg', 'png', 'jpeg'], 'Solo imágenes permitidas')
     ])
-    evidence_photo = FileField('Evidencia Fotográfica', validators=[
+    evidence_photos = MultipleFileField('Evidencia Fotográfica', validators=[
         FileAllowed(['jpg', 'png', 'jpeg'], 'Solo imágenes permitidas')
     ])
     submit = SubmitField('Agregar Antecedente')
@@ -80,9 +80,9 @@ class TrafficFineForm(FlaskForm):
     reason = StringField('Motivo', validators=[DataRequired()])
     submit = SubmitField('Imponer Multa')
 
-class PoliceReportForm(FlaskForm):
-    content = TextAreaField('Informe Policial', validators=[DataRequired()])
-    submit = SubmitField('Crear Informe')
+class CommentForm(FlaskForm):
+    content = TextAreaField('Comentario', validators=[DataRequired()])
+    submit = SubmitField('Agregar Comentario')
 
 class LicenseForm(FlaskForm):
     type = SelectField('Tipo de Licencia', choices=[
