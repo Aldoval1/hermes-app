@@ -53,26 +53,48 @@
             font-size: 14px;
             margin-top: 10px;
         }
+        .register-link {
+            margin-top: 15px;
+            font-size: 14px;
+        }
+        .register-link a {
+            color: #007bff;
+            text-decoration: none;
+        }
+        .register-link a:hover {
+            text-decoration: underline;
+        }
     </style>
 </head>
 <body>
     <div class="login-container">
         <h1>Gobierno de San Andreas</h1>
-        <form method="POST">
-            {{ form.hidden_tag() }}
-            <div>
-                {{ form.dni(placeholder="DNI") }}
+
+        {% if logged_in %}
+            <p>Has iniciado sesión correctamente.</p>
+            <a href="{{ url_for('main.logout') }}"><button>Cerrar Sesión</button></a>
+        {% else %}
+            <form method="POST">
+                {{ form.hidden_tag() }}
+                <div>
+                    {{ form.dni(placeholder="DNI") }}
+                </div>
+                <div>
+                    {{ form.password(placeholder="Contraseña") }}
+                </div>
+                <button type="submit">Iniciar Sesión</button>
+            </form>
+
+            <div class="register-link">
+                <a href="{{ url_for('main.register') }}">¿No tienes una cuenta?</a>
             </div>
-            <div>
-                {{ form.password(placeholder="Contraseña") }}
-            </div>
-            <button type="submit">Iniciar Sesión</button>
-        </form>
+        {% endif %}
+
         {% with messages = get_flashed_messages() %}
         {% if messages %}
             <div class="error">
                 {% for message in messages %}
-                    {{ message }}
+                    {{ message }}<br>
                 {% endfor %}
             </div>
         {% endif %}
