@@ -1,5 +1,5 @@
 from flask_wtf import FlaskForm
-from wtforms import StringField, PasswordField, SubmitField, BooleanField, SelectField
+from wtforms import StringField, PasswordField, SubmitField, BooleanField, SelectField, TextAreaField, FloatField, DateField
 from flask_wtf.file import FileField, FileRequired, FileAllowed
 from wtforms.validators import DataRequired, EqualTo
 
@@ -57,3 +57,40 @@ class OfficialRegistrationForm(FlaskForm):
         EqualTo('password', message='Las contraseñas deben coincidir')
     ])
     submit = SubmitField('Solicitar Registro')
+
+class SearchUserForm(FlaskForm):
+    query = StringField('Buscar por Nombre o DNI', validators=[DataRequired()])
+    submit = SubmitField('Buscar')
+
+class CriminalRecordForm(FlaskForm):
+    date = DateField('Fecha del Suceso', format='%Y-%m-%d', validators=[DataRequired()])
+    crime = StringField('Delito Cometido', validators=[DataRequired()])
+    penal_code = StringField('Código Penal Infringido', validators=[DataRequired()])
+    report_text = TextAreaField('Informe Detallado', validators=[DataRequired()])
+    subject_photo = FileField('Foto del Sujeto', validators=[
+        FileAllowed(['jpg', 'png', 'jpeg'], 'Solo imágenes permitidas')
+    ])
+    evidence_photo = FileField('Evidencia Fotográfica', validators=[
+        FileAllowed(['jpg', 'png', 'jpeg'], 'Solo imágenes permitidas')
+    ])
+    submit = SubmitField('Agregar Antecedente')
+
+class TrafficFineForm(FlaskForm):
+    amount = FloatField('Monto de la Multa', validators=[DataRequired()])
+    reason = StringField('Motivo', validators=[DataRequired()])
+    submit = SubmitField('Imponer Multa')
+
+class PoliceReportForm(FlaskForm):
+    content = TextAreaField('Informe Policial', validators=[DataRequired()])
+    submit = SubmitField('Crear Informe')
+
+class LicenseForm(FlaskForm):
+    type = SelectField('Tipo de Licencia', choices=[
+        ('Conducir', 'Conducir'),
+        ('Armas', 'Armas'),
+        ('Caza', 'Caza'),
+        ('Pesca', 'Pesca'),
+        ('Negocio', 'Negocio')
+    ], validators=[DataRequired()])
+    expiration_date = DateField('Fecha de Vencimiento', format='%Y-%m-%d')
+    submit = SubmitField('Asignar Licencia')
