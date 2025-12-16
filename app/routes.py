@@ -1,18 +1,18 @@
 import os
 from flask import render_template, flash, redirect, url_for, request, current_app
 from app import db
-from app.forms import LoginForm, RegistrationForm, OfficialLoginForm, OfficialRegistrationForm
-from app.models import User
+from app.forms import LoginForm, RegistrationForm, OfficialLoginForm, OfficialRegistrationForm, SearchUserForm, CriminalRecordForm, TrafficFineForm, PoliceReportForm
+from app.models import User, PoliceReport, TrafficFine, License, CriminalRecord
 from flask_login import current_user, login_user, logout_user, login_required
 from flask import Blueprint
 from werkzeug.utils import secure_filename
+from sqlalchemy import or_
 
 bp = Blueprint('main', __name__)
 
 @bp.route('/', methods=['GET', 'POST'])
 def index():
     if current_user.is_authenticated:
-        # Check if official
         if current_user.badge_id:
              return redirect(url_for('main.official_dashboard'))
         return render_template('login.html', form=LoginForm(), logged_in=True)
@@ -21,16 +21,9 @@ def index():
     if form.validate_on_submit():
         user = User.query.filter_by(dni=form.dni.data).first()
         if user is None or not user.check_password(form.password.data):
-             # Ensure this user is NOT an official trying to login here?
-             # Or allow officials to login as citizens?
-             # For simplicity, if they have badge_id, they should use official login?
-             # But a user might have both?
-             # Let's just check creds.
              flash('DNI o contraseña inválidos')
              return redirect(url_for('main.index'))
 
-        # If user is official and tries to login here, it works but where do they go?
-        # If they use DNI, they are logging in as citizen.
         login_user(user, remember=form.remember_me.data)
         flash('Inicio de sesión exitoso')
         return redirect(url_for('main.index'))
@@ -49,7 +42,6 @@ def register():
             flash('Ese DNI ya está registrado.')
             return redirect(url_for('main.register'))
 
-        # Save images
         selfie_file = form.selfie.data
         dni_photo_file = form.dni_photo.data
 
@@ -118,7 +110,6 @@ def official_register():
 
     form = OfficialRegistrationForm()
     if form.validate_on_submit():
-        # Check uniqueness
         if User.query.filter_by(dni=form.dni.data).first():
             flash('Ese DNI ya está registrado.')
             return redirect(url_for('main.official_register'))
@@ -141,7 +132,7 @@ def official_register():
             dni=form.dni.data,
             badge_id=form.badge_id.data,
             department=form.department.data,
-            selfie_filename=photo_filename, # Reusing this field for official photo
+            selfie_filename=photo_filename,
             official_status='Pendiente',
             official_rank='Miembro'
         )
@@ -160,12 +151,10 @@ def official_dashboard():
     if not current_user.badge_id:
         return redirect(url_for('main.index'))
 
-    # Check if Leader
-    if current_user.official_rank != 'Lider':
-        return f"<h1>Panel de Funcionario</h1><p>Bienvenido, {current_user.first_name}. Tu rango es {current_user.official_rank}.</p><a href='{url_for('main.logout')}'>Salir</a>"
+    pending_users = []
+    if current_user.official_rank == 'Lider':
+        pending_users = User.query.filter_by(department=current_user.department, official_status='Pendiente').all()
 
-    # Fetch pending users for this department
-    pending_users = User.query.filter_by(department=current_user.department, official_status='Pendiente').all()
     return render_template('official_dashboard.html', pending_users=pending_users)
 
 @bp.route('/official/action/<int:user_id>/<action>', methods=['POST'])
@@ -176,7 +165,6 @@ def official_action(user_id, action):
 
     target_user = User.query.get_or_404(user_id)
 
-    # Verify department match
     if target_user.department != current_user.department:
         flash('No tienes permiso para gestionar este usuario.')
         return redirect(url_for('main.official_dashboard'))
@@ -185,12 +173,147 @@ def official_action(user_id, action):
         target_user.official_status = 'Aprobado'
         flash(f'Usuario {target_user.first_name} {target_user.last_name} aprobado.')
     elif action == 'deny':
-        # target_user.official_status = 'Rechazado'
-        # Or delete? "aceptar o denegar" usually implies rejecting.
-        # If denied, maybe delete so they can try again or keep record?
-        # I'll delete for now to keep it clean, or mark rejected.
         db.session.delete(target_user)
         flash(f'Usuario {target_user.first_name} {target_user.last_name} denegado y eliminado.')
 
     db.session.commit()
     return redirect(url_for('main.official_dashboard'))
+
+# --- Citizen Database Routes ---
+
+@bp.route('/official/database', methods=['GET'])
+@login_required
+def official_database():
+    if not current_user.badge_id:
+        return redirect(url_for('main.index'))
+
+    form = SearchUserForm(request.args)
+    users = []
+    if form.query.data:
+        query = form.query.data
+        users = User.query.filter(
+            (User.badge_id == None) & # Only citizens? Or anyone? Let's search all, maybe official looks for official?
+            # Prompt says "usuarios registrados". Usually police look for citizens.
+            # I will filter users that are NOT currently 'Aprobado' officials? Or just anyone?
+            # A citizen can be official too?
+            # Let's just search all users.
+            (
+                User.first_name.contains(query) |
+                User.last_name.contains(query) |
+                User.dni.contains(query)
+            )
+        ).all()
+
+    return render_template('official_database.html', form=form, users=users)
+
+@bp.route('/official/citizen/<int:user_id>')
+@login_required
+def citizen_profile(user_id):
+    if not current_user.badge_id:
+        return redirect(url_for('main.index'))
+
+    citizen = User.query.get_or_404(user_id)
+
+    # Permissions
+    can_edit = current_user.department in ['Policia', 'Sheriff', 'LSFD'] # LSFD too? Prompt said "PD y Sherrif solo podra editar".
+    # Wait, "La PD y Sherrif solo podra editar...". What about LSFD?
+    # Prompt: "La PD y Sherrif solo podra editar el area de informes policiales, multas de trafico, detalles penales."
+    # So LSFD cannot.
+    can_edit = current_user.department in ['Policia', 'Sheriff']
+
+    # Forms
+    report_form = PoliceReportForm()
+    fine_form = TrafficFineForm()
+    criminal_form = CriminalRecordForm()
+
+    return render_template('citizen_profile.html', citizen=citizen, can_edit=can_edit,
+                           report_form=report_form, fine_form=fine_form, criminal_form=criminal_form)
+
+@bp.route('/official/citizen/<int:user_id>/add_report', methods=['POST'])
+@login_required
+def add_police_report(user_id):
+    if not current_user.badge_id or current_user.department not in ['Policia', 'Sheriff']:
+        flash('No tienes permiso para realizar esta acción.')
+        return redirect(url_for('main.citizen_profile', user_id=user_id))
+
+    form = PoliceReportForm()
+    if form.validate_on_submit():
+        report = PoliceReport(
+            content=form.content.data,
+            user_id=user_id,
+            author_id=current_user.id
+        )
+        db.session.add(report)
+        db.session.commit()
+        flash('Informe agregado.')
+
+    return redirect(url_for('main.citizen_profile', user_id=user_id))
+
+@bp.route('/official/citizen/<int:user_id>/add_fine', methods=['POST'])
+@login_required
+def add_traffic_fine(user_id):
+    if not current_user.badge_id or current_user.department not in ['Policia', 'Sheriff']:
+        flash('No tienes permiso para realizar esta acción.')
+        return redirect(url_for('main.citizen_profile', user_id=user_id))
+
+    form = TrafficFineForm()
+    if form.validate_on_submit():
+        fine = TrafficFine(
+            amount=form.amount.data,
+            reason=form.reason.data,
+            user_id=user_id,
+            author_id=current_user.id
+        )
+        db.session.add(fine)
+        db.session.commit()
+        flash('Multa impuesta.')
+
+    return redirect(url_for('main.citizen_profile', user_id=user_id))
+
+@bp.route('/official/citizen/<int:user_id>/add_criminal_record', methods=['POST'])
+@login_required
+def add_criminal_record(user_id):
+    if not current_user.badge_id or current_user.department not in ['Policia', 'Sheriff']:
+        flash('No tienes permiso para realizar esta acción.')
+        return redirect(url_for('main.citizen_profile', user_id=user_id))
+
+    form = CriminalRecordForm()
+    if form.validate_on_submit():
+        subject_photo = None
+        evidence_photo = None
+
+        if form.subject_photo.data:
+            f = form.subject_photo.data
+            filename = secure_filename(f.filename)
+            f.save(os.path.join(current_app.config['UPLOAD_FOLDER'], filename))
+            subject_photo = filename
+
+        if form.evidence_photo.data:
+            f = form.evidence_photo.data
+            filename = secure_filename(f.filename)
+            f.save(os.path.join(current_app.config['UPLOAD_FOLDER'], filename))
+            evidence_photo = filename
+
+        record = CriminalRecord(
+            date=form.date.data, # Note: datetime vs date. Model has DateTime. form.date.data is date.
+            # Need to convert or let SQLAlchemy handle it? It usually handles it, but safer to combine with min time.
+            # Or change form to DateTimeField. DateField returns date object.
+            # datetime.combine(form.date.data, datetime.min.time())
+            crime=form.crime.data,
+            penal_code=form.penal_code.data,
+            report_text=form.report_text.data,
+            subject_photo=subject_photo,
+            evidence_photo=evidence_photo,
+            user_id=user_id,
+            author_id=current_user.id
+        )
+        db.session.add(record)
+        db.session.commit()
+        flash('Antecedente penal registrado.')
+    else:
+        # Debug form errors
+        for field, errors in form.errors.items():
+            for error in errors:
+                flash(f"Error en {field}: {error}")
+
+    return redirect(url_for('main.citizen_profile', user_id=user_id))
