@@ -62,16 +62,6 @@
             justify-content: space-between;
             align-items: center;
         }
-        .btn-add {
-            background-color: #e67e22;
-            color: white;
-            padding: 5px 10px;
-            text-decoration: none;
-            border-radius: 4px;
-            font-size: 14px;
-            border: none;
-            cursor: pointer;
-        }
         .record-list {
             list-style: none;
             padding: 0;
@@ -100,6 +90,51 @@
             margin-bottom: 20px;
             color: #7f8c8d;
             text-decoration: none;
+        }
+
+        /* Dropdown Button */
+        .dropdown {
+            position: relative;
+            display: inline-block;
+            margin-bottom: 20px;
+        }
+
+        .dropbtn {
+            background-color: #3498db;
+            color: white;
+            padding: 10px 20px;
+            font-size: 16px;
+            border: none;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+
+        .dropdown-content {
+            display: none;
+            position: absolute;
+            background-color: #f9f9f9;
+            min-width: 200px;
+            box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+            z-index: 1;
+            border-radius: 4px;
+        }
+
+        .dropdown-content a {
+            color: black;
+            padding: 12px 16px;
+            text-decoration: none;
+            display: block;
+            cursor: pointer;
+        }
+
+        .dropdown-content a:hover {background-color: #f1f1f1}
+
+        .dropdown:hover .dropdown-content {
+            display: block;
+        }
+
+        .dropdown:hover .dropbtn {
+            background-color: #2980b9;
         }
 
         /* Modal styles */
@@ -176,14 +211,21 @@
             {% endif %}
         {% endwith %}
 
+        {% if can_edit %}
+        <div class="dropdown">
+            <button class="dropbtn">Gestionar ▼</button>
+            <div class="dropdown-content">
+                <a onclick="openModal('reportModal')">Agregar Informe Policial</a>
+                <a onclick="openModal('fineModal')">Agregar Multa</a>
+                <a onclick="openModal('criminalModal')">Agregar Antecedente</a>
+            </div>
+        </div>
+        {% endif %}
+
         <div class="sections">
             <!-- Police Reports -->
             <div class="section">
-                <h2>Informes Policiales
-                    {% if can_edit %}
-                    <button class="btn-add" onclick="openModal('reportModal')">+ Agregar</button>
-                    {% endif %}
-                </h2>
+                <h2>Informes Policiales</h2>
                 <ul class="record-list">
                     {% for report in citizen.police_reports %}
                     <li class="record-item">
@@ -198,11 +240,7 @@
 
             <!-- Traffic Fines -->
             <div class="section">
-                <h2>Multas de Tráfico
-                    {% if can_edit %}
-                    <button class="btn-add" onclick="openModal('fineModal')">+ Agregar</button>
-                    {% endif %}
-                </h2>
+                <h2>Multas de Tráfico</h2>
                 <ul class="record-list">
                     {% for fine in citizen.traffic_fines %}
                     <li class="record-item fine">
@@ -217,11 +255,7 @@
 
             <!-- Licenses -->
             <div class="section">
-                <h2>Licencias Activas
-                     {% if can_edit_licenses %} <!-- Maybe Gobierno only? Or PD too? Prompt implies PD edits reports/fines/criminal. Leaving licenses read only for now or let PD add? -->
-                     <!-- I'll assume for now PD/Sheriff can't edit this per prompt. -->
-                     {% endif %}
-                </h2>
+                <h2>Licencias Activas</h2>
                 <ul class="record-list">
                     {% for license in citizen.licenses %}
                     <li class="record-item license">
@@ -236,11 +270,7 @@
 
             <!-- Criminal Records -->
             <div class="section">
-                <h2>Antecedentes Penales
-                    {% if can_edit %}
-                    <button class="btn-add" onclick="openModal('criminalModal')">+ Agregar</button>
-                    {% endif %}
-                </h2>
+                <h2>Antecedentes Penales</h2>
                 <ul class="record-list">
                     {% for record in citizen.criminal_records %}
                     <li class="record-item criminal">
@@ -265,8 +295,6 @@
     </div>
 
     <!-- Modals (Only rendered if permission exists, or hidden) -->
-    <!-- I will render them but handle permission in backend. Frontend hiding is just UI. -->
-
     {% if can_edit %}
     <!-- Report Modal -->
     <div id="reportModal" class="modal">
