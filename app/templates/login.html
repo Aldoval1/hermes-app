@@ -1,73 +1,82 @@
-{% extends "base.html" %}
-
-{% block content %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gobierno de San Andreas</title>
     <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f0f2f5;
+            margin: 0;
+        }
         .login-container {
-            background-color: rgba(0, 0, 0, 0.4);
-            padding: 40px;
-            border-radius: 15px;
-            box-shadow: 0 0 20px rgba(76, 73, 128, 0.5);
-            width: 100%;
-            max-width: 400px;
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            width: 300px;
             text-align: center;
         }
         h1 {
-            color: #6c63ff;
+            color: #333;
+            font-size: 24px;
             margin-bottom: 20px;
         }
-        form p {
-            margin-bottom: 15px;
-        }
-        label {
-            display: block;
-            margin-bottom: 5px;
-            text-align: left;
-        }
-        input, select {
+        input[type="text"], input[type="password"] {
             width: 100%;
             padding: 10px;
-            border-radius: 5px;
-            border: 1px solid #6c63ff;
-            background-color: #333;
-            color: white;
-            box-sizing: border-box; /* Ensures padding doesn't affect width */
+            margin: 10px 0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
         }
-        input[type="submit"] {
-            background-color: #6c63ff;
+        button {
+            width: 100%;
+            background-color: #007bff;
+            color: white;
+            padding: 10px;
+            border: none;
+            border-radius: 4px;
             cursor: pointer;
-            font-weight: bold;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .error {
+            color: red;
+            font-size: 14px;
             margin-top: 10px;
         }
-        .register-link {
-            margin-top: 20px;
-        }
-        .register-link a {
-            color: #00aaff;
-            text-decoration: none;
-        }
-        .register-link a:hover {
-            text-decoration: underline;
-        }
     </style>
-
+</head>
+<body>
     <div class="login-container">
-        <h1>Iniciar Sesión en Hermes</h1>
-        <form action="" method="post" novalidate>
+        <h1>Gobierno de San Andreas</h1>
+        <form method="POST">
             {{ form.hidden_tag() }}
-            <p>
-                {{ form.username.label }}<br>
-                {{ form.username(size=32) }}
-            </p>
-            <p>
-                {{ form.password.label }}<br>
-                {{ form.password(size=32) }}
-            </p>
-            <p>
-                {{ form.role.label }}<br>
-                {{ form.role() }}
-            </p>
-            <p>{{ form.submit() }}</p>
+            <div>
+                {{ form.dni(placeholder="DNI") }}
+            </div>
+            <div>
+                {{ form.password(placeholder="Contraseña") }}
+            </div>
+            <button type="submit">Iniciar Sesión</button>
         </form>
-        <p class="register-link">¿Nuevo usuario? <a href="{{ url_for('main.register') }}">¡Crea una cuenta!</a></p>
+        {% with messages = get_flashed_messages() %}
+        {% if messages %}
+            <div class="error">
+                {% for message in messages %}
+                    {{ message }}
+                {% endfor %}
+            </div>
+        {% endif %}
+        {% endwith %}
     </div>
-{% endblock %}
+</body>
+</html>
