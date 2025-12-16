@@ -111,7 +111,11 @@
                     <td>{{ user.first_name }} {{ user.last_name }}</td>
                     <td>{{ user.dni }}</td>
                     <td>
+                        {% if user.selfie_filename %}
                         <a href="{{ url_for('static', filename='img/' + user.selfie_filename) }}" target="_blank">Ver Foto</a>
+                        {% else %}
+                        No Foto
+                        {% endif %}
                     </td>
                     <td>
                         <form action="{{ url_for('main.official_action', user_id=user.id, action='approve') }}" method="post" style="display:inline;">
