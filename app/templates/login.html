@@ -82,6 +82,9 @@
                 <div>
                     {{ form.password(placeholder="Contraseña") }}
                 </div>
+                <div style="text-align: left; margin: 10px 0;">
+                    {{ form.remember_me() }} {{ form.remember_me.label }}
+                </div>
                 <button type="submit">Iniciar Sesión</button>
             </form>
 

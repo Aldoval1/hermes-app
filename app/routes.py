@@ -29,7 +29,7 @@ def index():
         if user is None or not user.check_password(form.password.data):
             flash('DNI o contraseña inválidos')
             return redirect(url_for('main.index'))
-        login_user(user)
+        login_user(user, remember=form.remember_me.data)
         flash('Inicio de sesión exitoso')
         return redirect(url_for('main.index'))
 

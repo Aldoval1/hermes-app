@@ -1,11 +1,12 @@
 from flask_wtf import FlaskForm
-from wtforms import StringField, PasswordField, SubmitField
+from wtforms import StringField, PasswordField, SubmitField, BooleanField
 from flask_wtf.file import FileField, FileRequired, FileAllowed
 from wtforms.validators import DataRequired, EqualTo
 
 class LoginForm(FlaskForm):
     dni = StringField('DNI', validators=[DataRequired()])
     password = PasswordField('Contraseña', validators=[DataRequired()])
+    remember_me = BooleanField('Recordar datos')
     submit = SubmitField('Iniciar Sesión')
 
 class RegistrationForm(FlaskForm):
