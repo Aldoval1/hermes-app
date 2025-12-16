@@ -193,7 +193,7 @@
         <a href="{{ url_for('main.official_database') }}" class="back-link">← Volver a la Base de Datos</a>
 
         <div class="profile-header">
-            <img src="{{ url_for('static', filename='img/' + citizen.selfie_filename) }}" alt="Foto de {{ citizen.first_name }}" class="profile-img">
+            <img src="{{ url_for('static', filename='img/' + (citizen.selfie_filename if citizen.selfie_filename else 'default.jpg')) }}" alt="Foto de {{ citizen.first_name }}" class="profile-img">
             <div class="profile-info">
                 <h1>{{ citizen.first_name }} {{ citizen.last_name }}</h1>
                 <p><strong>DNI:</strong> {{ citizen.dni }}</p>
