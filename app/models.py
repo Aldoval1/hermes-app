@@ -11,6 +11,12 @@ class User(UserMixin, db.Model):
     dni_photo_filename = db.Column(db.String(128))
     password_hash = db.Column(db.String(128))
 
+    # Official fields
+    badge_id = db.Column(db.String(20), index=True, unique=True, nullable=True)
+    department = db.Column(db.String(50), nullable=True)
+    official_rank = db.Column(db.String(20), default='Miembro') # 'Lider', 'Miembro'
+    official_status = db.Column(db.String(20), default=None) # 'Pendiente', 'Aprobado', 'Rechazado'
+
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
 
