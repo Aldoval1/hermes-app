@@ -74,7 +74,7 @@
             border-left: 4px solid #bdc3c7;
         }
         .record-item.fine { border-left-color: #e74c3c; }
-        .record-item.criminal { border-left-color: #2c3e50; }
+        .record-item.criminal { border-left-color: #2c3e50; cursor: pointer; }
         .record-item.license { border-left-color: #27ae60; }
 
         .record-meta {
@@ -152,11 +152,13 @@
         }
         .modal-content {
             background-color: #fefefe;
-            margin: 10% auto;
+            margin: 5% auto;
             padding: 20px;
             border: 1px solid #888;
-            width: 50%;
+            width: 60%;
             border-radius: 8px;
+            max-height: 80vh;
+            overflow-y: auto;
         }
         .close {
             color: #aaa;
@@ -184,6 +186,19 @@
             padding: 10px 20px;
             border: none;
             border-radius: 4px;
+            cursor: pointer;
+        }
+        .gallery {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+        .gallery img {
+            width: 100px;
+            height: 100px;
+            object-fit: cover;
+            border: 1px solid #ccc;
             cursor: pointer;
         }
     </style>
@@ -215,7 +230,7 @@
         <div class="dropdown">
             <button class="dropbtn">Gestionar ▼</button>
             <div class="dropdown-content">
-                <a onclick="openModal('reportModal')">Agregar Informe Policial</a>
+                <a onclick="openModal('commentModal')">Agregar Comentario</a>
                 <a onclick="openModal('fineModal')">Agregar Multa</a>
                 <a onclick="openModal('criminalModal')">Agregar Antecedente</a>
             </div>
@@ -223,28 +238,28 @@
         {% endif %}
 
         <div class="sections">
-            <!-- Police Reports -->
+            <!-- Comments (formerly Police Reports) -->
             <div class="section">
-                <h2>Informes Policiales</h2>
+                <h2>Comentarios</h2>
                 <ul class="record-list">
-                    {% for report in citizen.police_reports %}
+                    {% for comment in citizen.comments %}
                     <li class="record-item">
-                        <div class="record-meta">{{ report.date.strftime('%d/%m/%Y') }} - Oficial: {{ report.author.badge_id }}</div>
-                        <div class="record-content">{{ report.content }}</div>
+                        <div class="record-meta">{{ comment.date.strftime('%d/%m/%Y') }} - Por: {{ comment.author.first_name }} {{ comment.author.last_name }}</div>
+                        <div class="record-content">{{ comment.content }}</div>
                     </li>
                     {% else %}
-                    <p style="color: #bdc3c7;">No hay informes policiales registrados.</p>
+                    <p style="color: #bdc3c7;">No hay comentarios registrados.</p>
                     {% endfor %}
                 </ul>
             </div>
 
-            <!-- Traffic Fines -->
+            <!-- Fines -->
             <div class="section">
-                <h2>Multas de Tráfico</h2>
+                <h2>Solo Multas</h2>
                 <ul class="record-list">
                     {% for fine in citizen.traffic_fines %}
                     <li class="record-item fine">
-                        <div class="record-meta">{{ fine.date.strftime('%d/%m/%Y') }} - Oficial: {{ fine.author.badge_id }} - Estado: {{ fine.status }}</div>
+                        <div class="record-meta">{{ fine.date.strftime('%d/%m/%Y') }} - Por: {{ fine.author.first_name }} {{ fine.author.last_name }} - Estado: {{ fine.status }}</div>
                         <div class="record-content"><strong>${{ fine.amount }}</strong> - {{ fine.reason }}</div>
                     </li>
                     {% else %}
@@ -273,19 +288,49 @@
                 <h2>Antecedentes Penales</h2>
                 <ul class="record-list">
                     {% for record in citizen.criminal_records %}
-                    <li class="record-item criminal">
-                        <div class="record-meta">{{ record.date.strftime('%d/%m/%Y') }} - Oficial: {{ record.author.badge_id }}</div>
+                    <li class="record-item criminal" onclick="openDetailModal('record-{{ record.id }}')">
+                        <div class="record-meta">{{ record.date.strftime('%d/%m/%Y') }} - Por: {{ record.author.first_name }} {{ record.author.last_name }}</div>
                         <div class="record-content">
-                            <strong>Delito:</strong> {{ record.crime }} (CP: {{ record.penal_code }})<br>
-                            <p>{{ record.report_text }}</p>
-                            {% if record.subject_photo %}
-                                <a href="{{ url_for('static', filename='img/' + record.subject_photo) }}" target="_blank">Ver Foto Sujeto</a>
-                            {% endif %}
-                            {% if record.evidence_photo %}
-                                | <a href="{{ url_for('static', filename='img/' + record.evidence_photo) }}" target="_blank">Ver Evidencia</a>
-                            {% endif %}
+                            <strong>{{ record.crime }}</strong> (CP: {{ record.penal_code }})
                         </div>
                     </li>
+
+                    <!-- Detail Modal for each record -->
+                    <div id="record-{{ record.id }}" class="modal">
+                        <div class="modal-content">
+                            <span class="close" onclick="closeModal('record-{{ record.id }}')">&times;</span>
+                            <h3>Detalle de Antecedente Penal</h3>
+                            <p><strong>Delito:</strong> {{ record.crime }}</p>
+                            <p><strong>Código Penal:</strong> {{ record.penal_code }}</p>
+                            <p><strong>Fecha:</strong> {{ record.date.strftime('%d/%m/%Y') }}</p>
+                            <p><strong>Oficial a cargo:</strong> {{ record.author.first_name }} {{ record.author.last_name }}</p>
+                            <hr>
+                            <h4>Informe</h4>
+                            <p>{{ record.report_text }}</p>
+
+                            <h4>Fotos del Sujeto</h4>
+                            <div class="gallery">
+                                {% for photo in record.subject_photos %}
+                                    <a href="{{ url_for('static', filename='img/' + photo.filename) }}" target="_blank">
+                                        <img src="{{ url_for('static', filename='img/' + photo.filename) }}">
+                                    </a>
+                                {% else %}
+                                    <p>No hay fotos del sujeto.</p>
+                                {% endfor %}
+                            </div>
+
+                            <h4>Evidencia</h4>
+                            <div class="gallery">
+                                {% for photo in record.evidence_photos %}
+                                    <a href="{{ url_for('static', filename='img/' + photo.filename) }}" target="_blank">
+                                        <img src="{{ url_for('static', filename='img/' + photo.filename) }}">
+                                    </a>
+                                {% else %}
+                                    <p>No hay evidencia fotográfica.</p>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
                     {% else %}
                     <p style="color: #bdc3c7;">No tiene antecedentes penales.</p>
                     {% endfor %}
@@ -313,7 +358,7 @@
     <div id="fineModal" class="modal">
         <div class="modal-content">
             <span class="close" onclick="closeModal('fineModal')">&times;</span>
-            <h3>Nueva Multa de Tráfico</h3>
+            <h3>Nueva Multa</h3>
             <form action="{{ url_for('main.add_traffic_fine', user_id=citizen.id) }}" method="POST">
                 {{ fine_form.hidden_tag() }}
                 {{ fine_form.amount(placeholder="Monto ($)") }}
@@ -347,6 +392,9 @@
 
     <script>
         function openModal(id) {
+            document.getElementById(id).style.display = "block";
+        }
+        function openDetailModal(id) {
             document.getElementById(id).style.display = "block";
         }
         function closeModal(id) {
