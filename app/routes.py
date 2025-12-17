@@ -131,6 +131,55 @@ def logout():
     logout_user()
     return redirect(url_for('main.index'))
 
+# --- Citizen Fines Routes ---
+
+@bp.route('/my_fines')
+@login_required
+def my_fines():
+    if current_user.badge_id:
+        return redirect(url_for('main.official_dashboard'))
+
+    fines = TrafficFine.query.filter_by(user_id=current_user.id, status='Pendiente').all()
+    history = TrafficFine.query.filter_by(user_id=current_user.id, status='Pagada').all()
+
+    return render_template('my_fines.html', fines=fines, history=history)
+
+@bp.route('/pay_fine/<int:fine_id>', methods=['POST'])
+@login_required
+def pay_fine(fine_id):
+    fine = TrafficFine.query.get_or_404(fine_id)
+
+    if fine.user_id != current_user.id:
+        flash('No tienes permiso para pagar esta multa.')
+        return redirect(url_for('main.my_fines'))
+
+    if fine.status != 'Pendiente':
+        flash('Esta multa ya está pagada.')
+        return redirect(url_for('main.my_fines'))
+
+    account = current_user.bank_account
+    if not account:
+        flash('Necesitas una cuenta bancaria para pagar multas. Visita la Banca Estatal.')
+        return redirect(url_for('main.my_fines'))
+
+    if account.balance < fine.amount:
+        flash('Fondos insuficientes en tu cuenta bancaria.')
+        return redirect(url_for('main.my_fines'))
+
+    # Process Payment
+    account.balance -= fine.amount
+    fine.status = 'Pagada'
+
+    trans = BankTransaction(
+        account_id=account.id, type='fine_payment', amount=fine.amount,
+        description=f'Pago de Multa: {fine.reason}'
+    )
+    db.session.add(trans)
+    db.session.commit()
+
+    flash(f'Multa de ${fine.amount} pagada con éxito.')
+    return redirect(url_for('main.my_fines'))
+
 # --- Banking Routes ---
 
 @bp.route('/banking')
