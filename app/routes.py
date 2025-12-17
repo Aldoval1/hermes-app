@@ -359,11 +359,13 @@ def banking_card_update():
     account = current_user.bank_account
     if form.validate_on_submit():
         account.card_style = form.style.data
-        if form.style.data == 'custom' and form.custom_image.data:
-            f = form.custom_image.data
-            filename = secure_filename(f.filename)
-            f.save(os.path.join(current_app.config['UPLOAD_FOLDER'], filename))
-            account.custom_image = filename
+        if form.style.data == 'custom':
+            if form.custom_image.data:
+                f = form.custom_image.data
+                filename = secure_filename(f.filename)
+                f.save(os.path.join(current_app.config['UPLOAD_FOLDER'], filename))
+                account.custom_image = filename
+            # If no new image, we keep the old one. If none existed, front end should handle it.
 
         db.session.commit()
         flash('Diseño de tarjeta actualizado.')
