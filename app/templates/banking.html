@@ -359,7 +359,7 @@
 
             // Camera
             camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
-            camera.position.z = 15;
+            camera.position.z = 12; // Zoomed in closer
 
             // Renderer
             renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
@@ -386,10 +386,11 @@
             // Textures
             const textureLoader = new THREE.TextureLoader();
             const frontTexture = createCardTexture(); // Canvas texture
+            const backTexture = createBackTexture(); // Back Canvas texture
 
             // Materials
             // Front: Canvas
-            // Back: Dark + Strip
+            // Back: Canvas with strip
             // Sides: Dark
 
             const frontMaterial = new THREE.MeshPhysicalMaterial({
@@ -400,8 +401,12 @@
                 clearcoatRoughness: 0.1
             });
 
+            const backMaterial = new THREE.MeshStandardMaterial({
+                map: backTexture,
+                roughness: 0.8
+            });
+
             const sideMaterial = new THREE.MeshStandardMaterial({ color: 0x111111 });
-            const backMaterial = new THREE.MeshStandardMaterial({ color: 0x222222 }); // Simplified back
 
             const materials = [
                 sideMaterial, // right
@@ -465,6 +470,41 @@
                 ctx.fillRect(0, 0, 1024, 640);
                 drawCardText(ctx);
             }
+
+            const texture = new THREE.CanvasTexture(canvas);
+            return texture;
+        }
+
+        function createBackTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 1024;
+            canvas.height = 640;
+            const ctx = canvas.getContext('2d');
+
+            // Background (Standard Grey/Dark)
+            ctx.fillStyle = '#34495e';
+            ctx.fillRect(0, 0, 1024, 640);
+
+            // Magnetic Stripe (Black)
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(0, 80, 1024, 150);
+
+            // Signature / CVV strip (White)
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(100, 300, 600, 80);
+
+            // CVV Text
+            ctx.font = '30px Arial';
+            ctx.fillStyle = '#000000';
+            ctx.textAlign = 'right';
+            ctx.fillText('CVV: ***', 680, 350);
+
+            // Bank Info Text
+            ctx.font = '20px Arial';
+            ctx.fillStyle = '#bdc3c7';
+            ctx.textAlign = 'center';
+            ctx.fillText('Propiedad del Gobierno de San Andreas. Uso intransferible.', 512, 550);
+            ctx.fillText('Si encuentra esta tarjeta, por favor devuélvala a la sucursal más cercana.', 512, 580);
 
             const texture = new THREE.CanvasTexture(canvas);
             return texture;
