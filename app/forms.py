@@ -126,3 +126,20 @@ class LotteryTicketForm(FlaskForm):
         Regexp('^[0-9]*$', message='Solo se permiten números')
     ])
     submit = SubmitField('Comprar Ticket ($500)')
+
+# Government Forms
+class AdjustBalanceForm(FlaskForm):
+    amount = FloatField('Cantidad', validators=[DataRequired(), NumberRange(min=0.01)])
+    operation = SelectField('Operación', choices=[('add', 'Añadir Dinero'), ('subtract', 'Quitar Dinero')], validators=[DataRequired()])
+    reason = StringField('Motivo', validators=[DataRequired()])
+    submit = SubmitField('Aplicar Ajuste')
+
+class GovFundAdjustForm(FlaskForm):
+    amount = FloatField('Cantidad', validators=[DataRequired(), NumberRange(min=0.01)])
+    operation = SelectField('Operación', choices=[('add', 'Ingresar Fondos'), ('subtract', 'Retirar Fondos')], validators=[DataRequired()])
+    reason = StringField('Motivo', validators=[DataRequired()])
+    submit = SubmitField('Ajustar Fondo')
+
+class SalaryForm(FlaskForm):
+    salary = FloatField('Salario', validators=[DataRequired(), NumberRange(min=0)])
+    submit = SubmitField('Guardar')

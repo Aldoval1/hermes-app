@@ -232,7 +232,12 @@
             <div class="dropdown-content">
                 <a onclick="openModal('commentModal')">Agregar Comentario</a>
                 <a onclick="openModal('fineModal')">Agregar Multa</a>
+                {% if can_edit %}
                 <a onclick="openModal('criminalModal')">Agregar Antecedente</a>
+                {% endif %}
+                {% if can_adjust_balance %}
+                <a onclick="openModal('balanceModal')">Ajustar Saldo Bancario</a>
+                {% endif %}
             </div>
         </div>
         {% endif %}
@@ -388,6 +393,24 @@
             </form>
         </div>
     </div>
+
+    {% if can_adjust_balance %}
+    <!-- Balance Modal -->
+    <div id="balanceModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('balanceModal')">&times;</span>
+            <h3>Ajustar Saldo Bancario</h3>
+            <p>Saldo Actual: ${{ "{:,.2f}".format(citizen.bank_account.balance) if citizen.bank_account else '0.00' }}</p>
+            <form action="{{ url_for('main.adjust_citizen_balance', user_id=citizen.id) }}" method="POST">
+                {{ adjust_balance_form.hidden_tag() }}
+                {{ adjust_balance_form.operation() }}
+                {{ adjust_balance_form.amount(placeholder="Cantidad") }}
+                {{ adjust_balance_form.reason(placeholder="Motivo del ajuste") }}
+                <button type="submit" style="background-color: #f39c12;">Aplicar Ajuste</button>
+            </form>
+        </div>
+    </div>
+    {% endif %}
     {% endif %}
 
     <script>

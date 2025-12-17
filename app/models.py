@@ -18,6 +18,9 @@ class User(UserMixin, db.Model):
     official_rank = db.Column(db.String(20), default='Miembro') # 'Lider', 'Miembro'
     official_status = db.Column(db.String(20), default=None) # 'Pendiente', 'Aprobado', 'Rechazado'
 
+    # Salary
+    salary = db.Column(db.Float, default=0.0)
+
     # Relationships
     comments = db.relationship('Comment', foreign_keys='Comment.user_id', backref='citizen', lazy=True)
     traffic_fines = db.relationship('TrafficFine', foreign_keys='TrafficFine.user_id', backref='citizen', lazy=True)
@@ -105,7 +108,7 @@ class BankAccount(db.Model):
 class BankTransaction(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     account_id = db.Column(db.Integer, db.ForeignKey('bank_account.id'), nullable=False)
-    type = db.Column(db.String(20)) # transfer_in, transfer_out, loan_received, loan_payment, loan_fee, savings_deposit, savings_withdrawal, interest, fine_payment, lottery_ticket, lottery_win
+    type = db.Column(db.String(20)) # transfer_in, transfer_out, loan_received, loan_payment, loan_fee, savings_deposit, savings_withdrawal, interest, fine_payment, lottery_ticket, lottery_win, salary, government_adjustment
     amount = db.Column(db.Float, nullable=False)
     related_account = db.Column(db.String(20)) # For transfers
     description = db.Column(db.String(100))
@@ -139,3 +142,26 @@ class LotteryTicket(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     numbers = db.Column(db.String(5), nullable=False)
     date = db.Column(db.Date, nullable=False, default=datetime.utcnow().date)
+
+# Government & Payroll Models
+
+class GovernmentFund(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    balance = db.Column(db.Float, default=1000000.0) # Initial seed
+
+class PayrollRequest(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    department = db.Column(db.String(50), nullable=False)
+    total_amount = db.Column(db.Float, nullable=False)
+    status = db.Column(db.String(20), default='Pending') # Pending, Approved, Rejected
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    items = db.relationship('PayrollItem', backref='request', lazy=True, cascade="all, delete-orphan")
+
+class PayrollItem(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    request_id = db.Column(db.Integer, db.ForeignKey('payroll_request.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    amount = db.Column(db.Float, nullable=False)
+
+    user = db.relationship('User')
