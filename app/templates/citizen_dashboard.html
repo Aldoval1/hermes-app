@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Ciudadano - Gobierno de San Andreas</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f0f2f5;
+            margin: 0;
+            padding: 0;
+        }
+        .header {
+            background-color: #ffffff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header h1 {
+            margin: 0;
+            color: #333;
+            font-size: 24px;
+        }
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .user-info span {
+            color: #555;
+            font-weight: 500;
+        }
+        .btn-logout {
+            background-color: #e74c3c;
+            color: white;
+            padding: 8px 15px;
+            border-radius: 4px;
+            text-decoration: none;
+            font-size: 14px;
+            transition: background-color 0.3s;
+        }
+        .btn-logout:hover {
+            background-color: #c0392b;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 40px auto;
+            padding: 0 20px;
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 30px;
+        }
+
+        .service-card {
+            background-color: white;
+            border-radius: 12px;
+            padding: 30px 20px;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            transition: transform 0.3s, box-shadow 0.3s;
+            cursor: pointer;
+            text-decoration: none;
+            color: inherit;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 200px;
+        }
+
+        .service-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+        }
+
+        .icon-container {
+            font-size: 48px;
+            margin-bottom: 20px;
+            color: #3498db;
+        }
+
+        .service-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        /* Specific colors for icons maybe? */
+        .card-banking .icon-container { color: #27ae60; }
+        .card-fines .icon-container { color: #e74c3c; }
+        .card-docs .icon-container { color: #f39c12; }
+        .card-lottery .icon-container { color: #8e44ad; }
+        .card-appointments .icon-container { color: #2980b9; }
+        .card-news .icon-container { color: #7f8c8d; }
+        .card-social .icon-container { color: #d35400; }
+
+        {% with messages = get_flashed_messages() %}
+        {% if messages %}
+        .flash-messages {
+            margin-bottom: 20px;
+        }
+        .alert {
+            padding: 15px;
+            background-color: #d4edda;
+            color: #155724;
+            border-radius: 4px;
+            border: 1px solid #c3e6cb;
+        }
+        {% endif %}
+        {% endwith %}
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Gobierno de San Andreas</h1>
+        <div class="user-info">
+            <span>Hola, {{ current_user.first_name }}</span>
+            <a href="{{ url_for('main.logout') }}" class="btn-logout">Cerrar Sesión</a>
+        </div>
+    </div>
+
+    <div class="container">
+        {% with messages = get_flashed_messages() %}
+        {% if messages %}
+            <div class="flash-messages">
+                {% for message in messages %}
+                    <div class="alert">{{ message }}</div>
+                {% endfor %}
+            </div>
+        {% endif %}
+        {% endwith %}
+
+        <div class="dashboard-grid">
+            <!-- Banca Estatal -->
+            <a href="#" class="service-card card-banking">
+                <div class="icon-container">
+                    <i class="fas fa-landmark"></i>
+                </div>
+                <div class="service-title">Banca Estatal</div>
+            </a>
+
+            <!-- Multas y Citaciones -->
+            <a href="#" class="service-card card-fines">
+                <div class="icon-container">
+                    <i class="fas fa-file-invoice-dollar"></i>
+                </div>
+                <div class="service-title">Multas y Citaciones</div>
+            </a>
+
+            <!-- Mis Documentos -->
+            <a href="#" class="service-card card-docs">
+                <div class="icon-container">
+                    <i class="fas fa-id-card"></i>
+                </div>
+                <div class="service-title">Mis Documentos</div>
+            </a>
+
+            <!-- Lotería Nacional -->
+            <a href="#" class="service-card card-lottery">
+                <div class="icon-container">
+                    <i class="fas fa-ticket-alt"></i>
+                </div>
+                <div class="service-title">Lotería Nacional</div>
+            </a>
+
+            <!-- Citas -->
+            <a href="#" class="service-card card-appointments">
+                <div class="icon-container">
+                    <i class="far fa-calendar-check"></i>
+                </div>
+                <div class="service-title">Citas</div>
+            </a>
+
+            <!-- Hemeroteca Digital -->
+            <a href="#" class="service-card card-news">
+                <div class="icon-container">
+                    <i class="far fa-newspaper"></i>
+                </div>
+                <div class="service-title">Hemeroteca Digital</div>
+            </a>
+
+            <!-- Planes Sociales -->
+            <a href="#" class="service-card card-social">
+                <div class="icon-container">
+                    <i class="fas fa-hands-helping"></i>
+                </div>
+                <div class="service-title">Planes Sociales</div>
+            </a>
+        </div>
+    </div>
+</body>
+</html>
