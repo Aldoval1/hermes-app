@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Banca Estatal - Gobierno de San Andreas</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f0f2f5;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+        .header h1 {
+            color: #2c3e50;
+        }
+        .back-link {
+            text-decoration: none;
+            color: #7f8c8d;
+            font-size: 14px;
+        }
+
+        /* 3D Card */
+        .card-container {
+            perspective: 1000px;
+            width: 350px;
+            height: 220px;
+            margin: 0 auto 40px auto;
+            position: relative;
+        }
+        .card-inner {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            text-align: center;
+            transition: transform 0.6s;
+            transform-style: preserve-3d;
+            border-radius: 15px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+        }
+        .card-front, .card-back {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            -webkit-backface-visibility: hidden;
+            backface-visibility: hidden;
+            border-radius: 15px;
+            padding: 20px;
+            box-sizing: border-box;
+            color: white;
+            background-size: cover;
+            background-position: center;
+        }
+        .card-front {
+            /* Default background, overridden by JS/style */
+            background-color: #2980b9;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+        .card-back {
+            background-color: #34495e;
+            transform: rotateY(180deg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Styles */
+        .style-blue .card-front { background: linear-gradient(135deg, #2980b9, #2c3e50); }
+        .style-gold .card-front { background: linear-gradient(135deg, #f1c40f, #d35400); }
+        .style-black .card-front { background: linear-gradient(135deg, #2c3e50, #000000); }
+        .style-custom .card-front { background-size: cover; }
+
+        .card-chip {
+            width: 50px;
+            height: 35px;
+            background: linear-gradient(135deg, #f1c40f, #f39c12);
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .card-number {
+            font-size: 22px;
+            letter-spacing: 2px;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+        }
+        .card-holder {
+            font-size: 14px;
+            text-transform: uppercase;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+        }
+        .card-balance {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        .edit-card-btn {
+            position: absolute;
+            top: 0;
+            right: -40px;
+            background: none;
+            border: none;
+            color: #7f8c8d;
+            font-size: 24px;
+            cursor: pointer;
+        }
+        .edit-card-btn:hover {
+            color: #3498db;
+        }
+
+        /* Menu */
+        .menu-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 20px;
+        }
+        .menu-item {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .menu-item:hover {
+            transform: translateY(-3px);
+        }
+        .menu-icon {
+            font-size: 32px;
+            margin-bottom: 10px;
+            color: #3498db;
+        }
+        .menu-label {
+            color: #2c3e50;
+            font-weight: 500;
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 100;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.5);
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: 10% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 400px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        input, select {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button.btn-action {
+            background-color: #27ae60;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+            font-size: 16px;
+        }
+
+        .transaction-list {
+            list-style: none;
+            padding: 0;
+            text-align: left;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .transaction-item {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            font-size: 14px;
+        }
+        .transaction-amount.positive { color: #27ae60; }
+        .transaction-amount.negative { color: #c0392b; }
+
+        /* Loan specific */
+        .loan-status {
+            background-color: #f9f9f9;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            text-align: left;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <a href="/" class="back-link">← Volver al Panel Principal</a>
+            <h1>Banca Estatal</h1>
+        </div>
+
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                {% for message in messages %}
+                    <div style="background: #dff0d8; padding: 10px; margin-bottom: 20px; border-radius: 4px; color: #3c763d; text-align: center;">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <div class="card-container" onmousemove="rotateCard(event)" onmouseleave="resetCard()">
+            <div class="card-inner {{ 'style-' + account.card_style }}" id="cardInner" {% if account.card_style == 'custom' %}style="background-image: url('{{ url_for('static', filename='img/' + account.custom_image) }}')"{% endif %}>
+                <div class="card-front">
+                    <div class="card-balance">${{ "%.2f"|format(account.balance) }}</div>
+                    <div class="card-chip"></div>
+                    <div class="card-number">{{ account.account_number }}</div>
+                    <div class="card-holder">{{ current_user.first_name }} {{ current_user.last_name }}</div>
+                </div>
+                <div class="card-back">
+                    <div style="background: white; color: black; padding: 5px 20px; width: 80%;">CVV: ***</div>
+                </div>
+            </div>
+            <button class="edit-card-btn" onclick="openModal('customizeModal')"><i class="fas fa-pen"></i></button>
+        </div>
+
+        <div class="menu-grid">
+            <div class="menu-item" onclick="openModal('transferModal')">
+                <div class="menu-icon"><i class="fas fa-exchange-alt"></i></div>
+                <div class="menu-label">Transferir</div>
+            </div>
+            <div class="menu-item" onclick="openModal('depositModal')">
+                <div class="menu-icon"><i class="fas fa-money-bill-wave"></i></div>
+                <div class="menu-label">Depositar/Retirar</div>
+            </div>
+            <div class="menu-item" onclick="openModal('loanModal')">
+                <div class="menu-icon"><i class="fas fa-hand-holding-usd"></i></div>
+                <div class="menu-label">Préstamos</div>
+            </div>
+            <div class="menu-item" onclick="openModal('savingsModal')">
+                <div class="menu-icon"><i class="fas fa-piggy-bank"></i></div>
+                <div class="menu-label">Ahorros</div>
+            </div>
+            <div class="menu-item" onclick="openModal('recordsModal')">
+                <div class="menu-icon"><i class="fas fa-history"></i></div>
+                <div class="menu-label">Registros</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modals -->
+
+    <!-- Transfer Modal -->
+    <div id="transferModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('transferModal')">&times;</span>
+            <h3>Transferencia</h3>
+            <form action="{{ url_for('main.banking_transfer') }}" method="POST">
+                {{ transfer_form.hidden_tag() }}
+                {{ transfer_form.account_number(placeholder="Número de Cuenta", oninput="lookupAccount(this.value)") }}
+                <div id="accountName" style="color: #27ae60; font-weight: bold; margin-bottom: 10px; height: 20px;"></div>
+                {{ transfer_form.amount(placeholder="Cantidad") }}
+                <button type="submit" class="btn-action">Enviar</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Deposit/Withdraw Modal -->
+    <div id="depositModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('depositModal')">&times;</span>
+            <h3>Atención</h3>
+            <p>Para realizar depósitos o retiros de efectivo, debe acudir presencialmente a una sucursal. Por favor, solicite una cita.</p>
+            <button class="btn-action" onclick="closeModal('depositModal')">Entendido</button>
+        </div>
+    </div>
+
+    <!-- Loan Modal -->
+    <div id="loanModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('loanModal')">&times;</span>
+            <h3>Préstamos</h3>
+            {% if active_loan %}
+                <div class="loan-status">
+                    <p><strong>Deuda Actual:</strong> ${{ "%.2f"|format(active_loan.amount_due) }}</p>
+                    <p><strong>Vence el:</strong> {{ active_loan.due_date.strftime('%d/%m/%Y') }}</p>
+                </div>
+                <form action="{{ url_for('main.banking_loan_repay') }}" method="POST">
+                    {{ repay_form.hidden_tag() }}
+                    {{ repay_form.amount(placeholder="Cantidad a Pagar") }}
+                    <button type="submit" class="btn-action">Pagar Deuda</button>
+                </form>
+            {% else %}
+                <p>Puedes solicitar un préstamo de $5500.</p>
+                <p style="font-size: 12px; color: #7f8c8d;">Condiciones: Debes pagar $6000 en 14 días. Penalización: 1% cada 2 días tras vencimiento.</p>
+                <form action="{{ url_for('main.banking_loan_apply') }}" method="POST">
+                    {{ loan_form.hidden_tag() }}
+                    <div style="text-align: left; font-size: 12px;">
+                        {{ loan_form.accept_terms() }} {{ loan_form.accept_terms.label }}
+                    </div>
+                    <button type="submit" class="btn-action" style="margin-top: 10px;">Solicitar $5500</button>
+                </form>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Savings Modal -->
+    <div id="savingsModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('savingsModal')">&times;</span>
+            <h3>Cuenta de Ahorros</h3>
+            <p>Beneficio: 4% mensual. Bloqueo por 30 días.</p>
+
+            <form action="{{ url_for('main.banking_savings_deposit') }}" method="POST" style="margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 20px;">
+                {{ savings_form.hidden_tag() }}
+                {{ savings_form.amount(placeholder="Cantidad a Ahorrar") }}
+                <button type="submit" class="btn-action">Depositar en Ahorros</button>
+            </form>
+
+            <div style="text-align: left; max-height: 200px; overflow-y: auto;">
+                {% for saving in savings_deposits %}
+                <div style="background: #f9f9f9; padding: 10px; margin-bottom: 5px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <strong>${{ "%.2f"|format(saving.amount) }}</strong><br>
+                        <span style="font-size: 11px; color: #7f8c8d;">Desbloqueo: {{ saving.unlock_date_str }}</span>
+                    </div>
+                    {% if saving.can_withdraw %}
+                        <a href="{{ url_for('main.banking_savings_withdraw', deposit_id=saving.id) }}" style="color: #27ae60; font-size: 12px; font-weight: bold;">Retirar (+4%)</a>
+                    {% else %}
+                        <span style="font-size: 12px; color: #95a5a6;"><i class="fas fa-lock"></i></span>
+                    {% endif %}
+                </div>
+                {% else %}
+                    <p style="color: #ccc; text-align: center;">No tienes ahorros activos.</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Records Modal -->
+    <div id="recordsModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('recordsModal')">&times;</span>
+            <h3>Historial de Transacciones</h3>
+            <ul class="transaction-list">
+                {% for trans in transactions %}
+                <li class="transaction-item">
+                    <div style="display: flex; justify-content: space-between;">
+                        <span>{{ trans.description }}</span>
+                        <span class="transaction-amount {{ 'positive' if trans.is_positive else 'negative' }}">
+                            {{ '+' if trans.is_positive else '-' }}${{ "%.2f"|format(trans.amount) }}
+                        </span>
+                    </div>
+                    <div style="font-size: 11px; color: #95a5a6;">{{ trans.timestamp.strftime('%d/%m/%Y %H:%M') }}</div>
+                </li>
+                {% else %}
+                    <p style="text-align: center; color: #ccc;">No hay transacciones recientes.</p>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+
+    <!-- Customize Card Modal -->
+    <div id="customizeModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('customizeModal')">&times;</span>
+            <h3>Personalizar Tarjeta</h3>
+            <form action="{{ url_for('main.banking_card_update') }}" method="POST" enctype="multipart/form-data">
+                {{ card_form.hidden_tag() }}
+                {{ card_form.style(onchange="checkCustom(this.value)") }}
+                <div id="customUpload" style="display: none;">
+                    <p style="font-size: 12px;">Sube tu diseño (Recomendado: 350x220px)</p>
+                    {{ card_form.custom_image() }}
+                </div>
+                <button type="submit" class="btn-action">Guardar</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function openModal(id) {
+            document.getElementById(id).style.display = "block";
+        }
+        function closeModal(id) {
+            document.getElementById(id).style.display = "none";
+        }
+        window.onclick = function(event) {
+            if (event.target.classList.contains('modal')) {
+                event.target.style.display = "none";
+            }
+        }
+
+        // 3D Card Rotation
+        function rotateCard(event) {
+            const card = document.getElementById('cardInner');
+            const container = document.querySelector('.card-container');
+            const rect = container.getBoundingClientRect();
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
+
+            const centerX = rect.width / 2;
+            const centerY = rect.height / 2;
+
+            const rotateX = ((y - centerY) / centerY) * -20; // Max rotation deg
+            const rotateY = ((x - centerX) / centerX) * 20;
+
+            card.style.transform = `rotateX(${rotateX}deg) rotateY(${rotateY}deg)`;
+        }
+
+        function resetCard() {
+            document.getElementById('cardInner').style.transform = 'rotateX(0deg) rotateY(0deg)';
+        }
+
+        // Account Lookup
+        function lookupAccount(number) {
+            const resultDiv = document.getElementById('accountName');
+            if (number.length > 3) {
+                fetch(`/banking/lookup/${number}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.name) {
+                            resultDiv.innerText = data.name;
+                            resultDiv.style.color = '#27ae60';
+                        } else {
+                            resultDiv.innerText = "Cuenta no encontrada";
+                            resultDiv.style.color = '#e74c3c';
+                        }
+                    });
+            } else {
+                resultDiv.innerText = "";
+            }
+        }
+
+        function checkCustom(val) {
+            document.getElementById('customUpload').style.display = (val === 'custom') ? 'block' : 'none';
+        }
+    </script>
+</body>
+</html>
