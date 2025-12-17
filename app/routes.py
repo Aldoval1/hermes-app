@@ -15,7 +15,7 @@ def index():
     if current_user.is_authenticated:
         if current_user.badge_id:
              return redirect(url_for('main.official_dashboard'))
-        return render_template('login.html', form=LoginForm(), logged_in=True)
+        return render_template('citizen_dashboard.html')
 
     form = LoginForm()
     if form.validate_on_submit():
@@ -25,7 +25,6 @@ def index():
              return redirect(url_for('main.index'))
 
         login_user(user, remember=form.remember_me.data)
-        flash('Inicio de sesión exitoso')
         return redirect(url_for('main.index'))
 
     return render_template('login.html', form=form, logged_in=False)
