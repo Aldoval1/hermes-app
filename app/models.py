@@ -24,6 +24,9 @@ class User(UserMixin, db.Model):
     licenses = db.relationship('License', backref='citizen', lazy=True)
     criminal_records = db.relationship('CriminalRecord', foreign_keys='CriminalRecord.user_id', backref='citizen', lazy=True)
 
+    # Banking
+    bank_account = db.relationship('BankAccount', backref='owner', uselist=False)
+
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
 
@@ -81,3 +84,42 @@ class CriminalRecordEvidencePhoto(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     filename = db.Column(db.String(128), nullable=False)
     record_id = db.Column(db.Integer, db.ForeignKey('criminal_record.id'), nullable=False)
+
+# Banking Models
+
+class BankAccount(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    account_number = db.Column(db.String(20), unique=True, nullable=False)
+    balance = db.Column(db.Float, default=0.0)
+    card_style = db.Column(db.String(20), default='blue') # blue, gold, black, custom
+    custom_image = db.Column(db.String(128)) # filename if custom
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+
+    loans = db.relationship('BankLoan', backref='account', lazy=True)
+    savings = db.relationship('BankSavings', backref='account', lazy=True)
+    transactions = db.relationship('BankTransaction', foreign_keys='BankTransaction.account_id', backref='account', lazy=True)
+
+class BankTransaction(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    account_id = db.Column(db.Integer, db.ForeignKey('bank_account.id'), nullable=False)
+    type = db.Column(db.String(20)) # transfer_in, transfer_out, loan_received, loan_payment, loan_fee, savings_deposit, savings_withdrawal, interest
+    amount = db.Column(db.Float, nullable=False)
+    related_account = db.Column(db.String(20)) # For transfers
+    description = db.Column(db.String(100))
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+
+class BankLoan(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    account_id = db.Column(db.Integer, db.ForeignKey('bank_account.id'), nullable=False)
+    amount_due = db.Column(db.Float, nullable=False) # Starts at 6000
+    start_date = db.Column(db.DateTime, default=datetime.utcnow)
+    due_date = db.Column(db.DateTime, nullable=False) # start + 14 days
+    last_penalty_check = db.Column(db.DateTime)
+    status = db.Column(db.String(20), default='Active') # Active, Paid
+
+class BankSavings(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    account_id = db.Column(db.Integer, db.ForeignKey('bank_account.id'), nullable=False)
+    amount = db.Column(db.Float, nullable=False)
+    deposit_date = db.Column(db.DateTime, default=datetime.utcnow)
+    status = db.Column(db.String(20), default='Active') # Active, Withdrawn

@@ -1,7 +1,7 @@
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, SubmitField, BooleanField, SelectField, TextAreaField, FloatField, DateField, MultipleFileField
 from flask_wtf.file import FileField, FileRequired, FileAllowed
-from wtforms.validators import DataRequired, EqualTo
+from wtforms.validators import DataRequired, EqualTo, NumberRange
 
 class LoginForm(FlaskForm):
     dni = StringField('DNI', validators=[DataRequired()])
@@ -94,3 +94,26 @@ class LicenseForm(FlaskForm):
     ], validators=[DataRequired()])
     expiration_date = DateField('Fecha de Vencimiento', format='%Y-%m-%d')
     submit = SubmitField('Asignar Licencia')
+
+# Banking Forms
+class TransferForm(FlaskForm):
+    account_number = StringField('Número de Cuenta', validators=[DataRequired()])
+    amount = FloatField('Cantidad', validators=[DataRequired(), NumberRange(min=0.01)])
+    submit = SubmitField('Transferir')
+
+class LoanForm(FlaskForm):
+    accept_terms = BooleanField('Acepto las condiciones: Pagaré $6000 en 14 días.', validators=[DataRequired()])
+    submit = SubmitField('Solicitar Préstamo')
+
+class LoanRepayForm(FlaskForm):
+    amount = FloatField('Cantidad a Pagar', validators=[DataRequired(), NumberRange(min=0.01)])
+    submit = SubmitField('Pagar')
+
+class SavingsForm(FlaskForm):
+    amount = FloatField('Cantidad a Depositar', validators=[DataRequired(), NumberRange(min=0.01)])
+    submit = SubmitField('Depositar')
+
+class CardCustomizationForm(FlaskForm):
+    style = SelectField('Estilo', choices=[('blue', 'Azul Clásico'), ('gold', 'Oro Premium'), ('black', 'Negro Elite'), ('custom', 'Personalizado')])
+    custom_image = FileField('Imagen Personalizada', validators=[FileAllowed(['jpg', 'png', 'jpeg'], 'Solo imágenes!')])
+    submit = SubmitField('Guardar Diseño')
