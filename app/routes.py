@@ -1,18 +1,20 @@
 import os
 import random
 import string
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from flask import render_template, flash, redirect, url_for, request, current_app, jsonify
 from app import db
 from app.forms import (
     LoginForm, RegistrationForm, OfficialLoginForm, OfficialRegistrationForm,
     SearchUserForm, CriminalRecordForm, TrafficFineForm, CommentForm,
-    TransferForm, LoanForm, LoanRepayForm, SavingsForm, CardCustomizationForm
+    TransferForm, LoanForm, LoanRepayForm, SavingsForm, CardCustomizationForm,
+    LotteryTicketForm
 )
 from app.models import (
     User, Comment, TrafficFine, License, CriminalRecord,
     CriminalRecordSubjectPhoto, CriminalRecordEvidencePhoto,
-    BankAccount, BankTransaction, BankLoan, BankSavings
+    BankAccount, BankTransaction, BankLoan, BankSavings,
+    Lottery, LotteryTicket
 )
 from flask_login import current_user, login_user, logout_user, login_required
 from flask import Blueprint
@@ -34,25 +36,16 @@ def check_loan_penalties(account):
     loans = BankLoan.query.filter_by(account_id=account.id, status='Active').all()
     for loan in loans:
         if datetime.utcnow() > loan.due_date:
-            # Check if penalty needs to be applied (every 2 days)
-            # Logic: (current_time - due_date).days // 2
-            # But we need to make sure we don't apply it multiple times for the same period.
-            # Use last_penalty_check or due_date as base.
             base_date = loan.last_penalty_check if loan.last_penalty_check else loan.due_date
-
-            # Days since last check/due date
             diff = datetime.utcnow() - base_date
             if diff.days >= 2:
-                # Apply 1% penalty for every 2-day period elapsed
                 intervals = diff.days // 2
                 penalty_amount = (loan.amount_due * 0.01) * intervals
 
                 loan.amount_due += penalty_amount
-                # Deduct from account balance (can go negative)
                 account.balance -= penalty_amount
                 loan.last_penalty_check = datetime.utcnow()
 
-                # Record transaction
                 trans = BankTransaction(
                     account_id=account.id,
                     type='loan_fee',
@@ -61,6 +54,57 @@ def check_loan_penalties(account):
                 )
                 db.session.add(trans)
                 db.session.commit()
+
+def get_lottery_state():
+    """Ensure lottery record exists and handle daily draw."""
+    lottery = Lottery.query.first()
+    if not lottery:
+        lottery = Lottery(current_jackpot=50000.0, last_run_date=datetime.utcnow().date())
+        db.session.add(lottery)
+        db.session.commit()
+
+    # Check if a day has passed since last run
+    today = datetime.utcnow().date()
+    if today > lottery.last_run_date:
+        # It's a new day, run draw for the previous day (or actually run draw for the last active cycle)
+        # Assuming the lottery "closes" at end of day and we are now processing it.
+        # Winner number
+        winning_number = ''.join(random.choices(string.digits, k=5))
+
+        # Find winning tickets from the last run date (or all pending tickets before today)
+        # Actually, if we just check tickets with date < today.
+        # But tickets are valid only for the day they are bought according to prompt "Una vez se acabe el dia se quitan los tickets comprados".
+        # So we check tickets where date == lottery.last_run_date.
+
+        winning_tickets = LotteryTicket.query.filter_by(date=lottery.last_run_date, numbers=winning_number).all()
+
+        if winning_tickets:
+            prize_per_winner = lottery.current_jackpot / len(winning_tickets)
+            for ticket in winning_tickets:
+                winner_acc = ticket.owner.bank_account
+                if winner_acc:
+                    winner_acc.balance += prize_per_winner
+                    trans = BankTransaction(
+                        account_id=winner_acc.id, type='lottery_win', amount=prize_per_winner,
+                        description=f'Premio Lotería (Núm: {winning_number})'
+                    )
+                    db.session.add(trans)
+            # Reset jackpot
+            lottery.current_jackpot = 50000.0
+        else:
+            # Rollover? Prompt says "va a iniciar siendo 50000", implies reset base.
+            # But usually lotteries rollover.
+            # If prompt says "iniciar siendo 50000" it might mean base is 50k.
+            # If no winner, let's keep it (rollover) or reset?
+            # "Hay un gran premio que va a iniciar siendo 50000 ... 250 dolares iran automaticamente para el premio final".
+            # Usually implies it grows until won. So I will rollover.
+            pass
+
+        # Update last run date to today (start fresh for today)
+        lottery.last_run_date = today
+        db.session.commit()
+
+    return lottery
 
 # --- Main Routes ---
 
@@ -185,7 +229,6 @@ def pay_fine(fine_id):
 @bp.route('/banking')
 @login_required
 def banking_dashboard():
-    # Check if user has bank account, if not create one
     if not current_user.bank_account:
         new_account = BankAccount(
             account_number=generate_account_number(),
@@ -198,11 +241,8 @@ def banking_dashboard():
         return redirect(url_for('main.banking_dashboard'))
 
     account = current_user.bank_account
-
-    # Check loan penalties
     check_loan_penalties(account)
 
-    # Prepare data for dashboard
     transfer_form = TransferForm()
     loan_form = LoanForm()
     repay_form = LoanRepayForm()
@@ -211,7 +251,6 @@ def banking_dashboard():
 
     active_loan = BankLoan.query.filter_by(account_id=account.id, status='Active').first()
 
-    # Process Savings deposits for view (calculate status/can_withdraw)
     savings_deposits = []
     db_savings = BankSavings.query.filter_by(account_id=account.id, status='Active').order_by(BankSavings.deposit_date.desc()).all()
     for saving in db_savings:
@@ -228,9 +267,8 @@ def banking_dashboard():
         (BankTransaction.account_id == account.id)
     ).order_by(BankTransaction.timestamp.desc()).all()
 
-    # Add flag for positive/negative display (simplified logic)
     for t in transactions:
-        t.is_positive = t.type in ['transfer_in', 'loan_received', 'savings_withdrawal', 'interest']
+        t.is_positive = t.type in ['transfer_in', 'loan_received', 'savings_withdrawal', 'interest', 'lottery_win']
 
     return render_template('banking.html', account=account,
                            transfer_form=transfer_form, loan_form=loan_form,
@@ -262,17 +300,14 @@ def banking_transfer():
         elif account.balance < amount:
             flash('Fondos insuficientes.')
         else:
-            # Execute Transfer
             account.balance -= amount
             target_acc.balance += amount
 
-            # Record Outgoing
             trans_out = BankTransaction(
                 account_id=account.id, type='transfer_out', amount=amount,
                 related_account=target_acc.account_number,
                 description=f'Transferencia a {target_acc.owner.first_name}'
             )
-            # Record Incoming
             trans_in = BankTransaction(
                 account_id=target_acc.id, type='transfer_in', amount=amount,
                 related_account=account.account_number,
@@ -295,7 +330,6 @@ def banking_loan_apply():
         if BankLoan.query.filter_by(account_id=account.id, status='Active').first():
             flash('Ya tienes un préstamo activo.')
         else:
-            # Grant loan
             account.balance += 5500
             loan = BankLoan(
                 account_id=account.id,
@@ -325,13 +359,11 @@ def banking_loan_repay():
             flash('Fondos insuficientes para pagar esa cantidad.')
         else:
             if amount >= loan.amount_due:
-                # Full payment
                 pay_amount = loan.amount_due
                 loan.amount_due = 0
                 loan.status = 'Paid'
                 flash('¡Préstamo pagado en su totalidad!')
             else:
-                # Partial payment
                 pay_amount = amount
                 loan.amount_due -= amount
                 flash(f'Pago parcial de ${amount} realizado.')
@@ -386,7 +418,6 @@ def banking_savings_withdraw(deposit_id):
         flash('Este depósito aún está bloqueado.')
         return redirect(url_for('main.banking_dashboard'))
 
-    # Withdraw with 4% interest
     total_amount = saving.amount * 1.04
     account.balance += total_amount
     saving.status = 'Withdrawn'
@@ -414,13 +445,63 @@ def banking_card_update():
                 filename = secure_filename(f.filename)
                 f.save(os.path.join(current_app.config['UPLOAD_FOLDER'], filename))
                 account.custom_image = filename
-            # If no new image, we keep the old one. If none existed, front end should handle it.
 
         db.session.commit()
         flash('Diseño de tarjeta actualizado.')
     return redirect(url_for('main.banking_dashboard'))
 
-# --- Official Routes (Keeping previous ones) ---
+# --- Lottery Routes ---
+
+@bp.route('/lottery', methods=['GET', 'POST'])
+@login_required
+def lottery():
+    lottery = get_lottery_state()
+    form = LotteryTicketForm()
+
+    # Get user's tickets for today
+    today = datetime.utcnow().date()
+    my_tickets = LotteryTicket.query.filter_by(user_id=current_user.id, date=today).all()
+
+    return render_template('lottery.html', lottery=lottery, form=form, my_tickets=my_tickets)
+
+@bp.route('/lottery/buy', methods=['POST'])
+@login_required
+def buy_lottery_ticket():
+    lottery = get_lottery_state()
+    form = LotteryTicketForm()
+    account = current_user.bank_account
+
+    if not account:
+        flash('Necesitas una cuenta bancaria para jugar.')
+        return redirect(url_for('main.lottery'))
+
+    if form.validate_on_submit():
+        if account.balance < 500:
+            flash('Fondos insuficientes.')
+        else:
+            # Process purchase
+            account.balance -= 500
+            lottery.current_jackpot += 250
+
+            ticket = LotteryTicket(
+                user_id=current_user.id,
+                numbers=form.numbers.data,
+                date=datetime.utcnow().date()
+            )
+
+            trans = BankTransaction(
+                account_id=account.id, type='lottery_ticket', amount=500,
+                description=f'Ticket Lotería: {form.numbers.data}'
+            )
+
+            db.session.add(ticket)
+            db.session.add(trans)
+            db.session.commit()
+            flash(f'Ticket {form.numbers.data} comprado con éxito.')
+
+    return redirect(url_for('main.lottery'))
+
+# --- Official Routes ---
 
 @bp.route('/official/login', methods=['GET', 'POST'])
 def official_login():

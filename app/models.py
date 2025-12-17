@@ -27,6 +27,9 @@ class User(UserMixin, db.Model):
     # Banking
     bank_account = db.relationship('BankAccount', backref='owner', uselist=False)
 
+    # Lottery
+    lottery_tickets = db.relationship('LotteryTicket', backref='owner', lazy=True)
+
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
 
@@ -102,7 +105,7 @@ class BankAccount(db.Model):
 class BankTransaction(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     account_id = db.Column(db.Integer, db.ForeignKey('bank_account.id'), nullable=False)
-    type = db.Column(db.String(20)) # transfer_in, transfer_out, loan_received, loan_payment, loan_fee, savings_deposit, savings_withdrawal, interest
+    type = db.Column(db.String(20)) # transfer_in, transfer_out, loan_received, loan_payment, loan_fee, savings_deposit, savings_withdrawal, interest, fine_payment, lottery_ticket, lottery_win
     amount = db.Column(db.Float, nullable=False)
     related_account = db.Column(db.String(20)) # For transfers
     description = db.Column(db.String(100))
@@ -123,3 +126,16 @@ class BankSavings(db.Model):
     amount = db.Column(db.Float, nullable=False)
     deposit_date = db.Column(db.DateTime, default=datetime.utcnow)
     status = db.Column(db.String(20), default='Active') # Active, Withdrawn
+
+# Lottery Models
+
+class Lottery(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    current_jackpot = db.Column(db.Float, default=50000.0)
+    last_run_date = db.Column(db.Date, nullable=False, default=datetime.utcnow().date)
+
+class LotteryTicket(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    numbers = db.Column(db.String(5), nullable=False)
+    date = db.Column(db.Date, nullable=False, default=datetime.utcnow().date)

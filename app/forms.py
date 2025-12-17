@@ -1,7 +1,7 @@
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, SubmitField, BooleanField, SelectField, TextAreaField, FloatField, DateField, MultipleFileField
 from flask_wtf.file import FileField, FileRequired, FileAllowed
-from wtforms.validators import DataRequired, EqualTo, NumberRange
+from wtforms.validators import DataRequired, EqualTo, NumberRange, Length, Regexp
 
 class LoginForm(FlaskForm):
     dni = StringField('DNI', validators=[DataRequired()])
@@ -117,3 +117,12 @@ class CardCustomizationForm(FlaskForm):
     style = SelectField('Estilo', choices=[('blue', 'Azul Clásico'), ('gold', 'Oro Premium'), ('black', 'Negro Elite'), ('custom', 'Personalizado')])
     custom_image = FileField('Imagen Personalizada', validators=[FileAllowed(['jpg', 'png', 'jpeg'], 'Solo imágenes!')])
     submit = SubmitField('Guardar Diseño')
+
+# Lottery Form
+class LotteryTicketForm(FlaskForm):
+    numbers = StringField('Tus 5 Números', validators=[
+        DataRequired(),
+        Length(min=5, max=5, message='Deben ser exactamente 5 dígitos'),
+        Regexp('^[0-9]*$', message='Solo se permiten números')
+    ])
+    submit = SubmitField('Comprar Ticket ($500)')
