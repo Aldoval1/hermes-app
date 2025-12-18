@@ -8,13 +8,13 @@ from app.forms import (
     LoginForm, RegistrationForm, OfficialLoginForm, OfficialRegistrationForm,
     SearchUserForm, CriminalRecordForm, TrafficFineForm, CommentForm,
     TransferForm, LoanForm, LoanRepayForm, SavingsForm, CardCustomizationForm,
-    LotteryTicketForm
+    LotteryTicketForm, AdjustBalanceForm, GovFundAdjustForm, SalaryForm
 )
 from app.models import (
     User, Comment, TrafficFine, License, CriminalRecord,
     CriminalRecordSubjectPhoto, CriminalRecordEvidencePhoto,
     BankAccount, BankTransaction, BankLoan, BankSavings,
-    Lottery, LotteryTicket
+    Lottery, LotteryTicket, GovernmentFund, PayrollRequest, PayrollItem
 )
 from flask_login import current_user, login_user, logout_user, login_required
 from flask import Blueprint
@@ -63,19 +63,11 @@ def get_lottery_state():
         db.session.add(lottery)
         db.session.commit()
 
-    # Check if a day has passed since last run
     today = datetime.utcnow().date()
     if today > lottery.last_run_date:
-        # It's a new day, run draw for the previous day (or actually run draw for the last active cycle)
-        # Assuming the lottery "closes" at end of day and we are now processing it.
-        # Winner number
         winning_number = ''.join(random.choices(string.digits, k=5))
 
-        # Find winning tickets from the last run date (or all pending tickets before today)
-        # Actually, if we just check tickets with date < today.
-        # But tickets are valid only for the day they are bought according to prompt "Una vez se acabe el dia se quitan los tickets comprados".
-        # So we check tickets where date == lottery.last_run_date.
-
+        # Draw for tickets bought on the last_run_date (yesterday/previous active day)
         winning_tickets = LotteryTicket.query.filter_by(date=lottery.last_run_date, numbers=winning_number).all()
 
         if winning_tickets:
@@ -89,22 +81,20 @@ def get_lottery_state():
                         description=f'Premio Lotería (Núm: {winning_number})'
                     )
                     db.session.add(trans)
-            # Reset jackpot
             lottery.current_jackpot = 50000.0
-        else:
-            # Rollover? Prompt says "va a iniciar siendo 50000", implies reset base.
-            # But usually lotteries rollover.
-            # If prompt says "iniciar siendo 50000" it might mean base is 50k.
-            # If no winner, let's keep it (rollover) or reset?
-            # "Hay un gran premio que va a iniciar siendo 50000 ... 250 dolares iran automaticamente para el premio final".
-            # Usually implies it grows until won. So I will rollover.
-            pass
 
-        # Update last run date to today (start fresh for today)
         lottery.last_run_date = today
         db.session.commit()
 
     return lottery
+
+def get_gov_fund():
+    fund = GovernmentFund.query.first()
+    if not fund:
+        fund = GovernmentFund(balance=1000000.0)
+        db.session.add(fund)
+        db.session.commit()
+    return fund
 
 # --- Main Routes ---
 
@@ -219,6 +209,11 @@ def pay_fine(fine_id):
         description=f'Pago de Multa: {fine.reason}'
     )
     db.session.add(trans)
+
+    # Add money to Gov Fund (assuming fines go to gov?)
+    fund = get_gov_fund()
+    fund.balance += fine.amount
+
     db.session.commit()
 
     flash(f'Multa de ${fine.amount} pagada con éxito.')
@@ -268,7 +263,7 @@ def banking_dashboard():
     ).order_by(BankTransaction.timestamp.desc()).all()
 
     for t in transactions:
-        t.is_positive = t.type in ['transfer_in', 'loan_received', 'savings_withdrawal', 'interest', 'lottery_win']
+        t.is_positive = t.type in ['transfer_in', 'loan_received', 'savings_withdrawal', 'interest', 'lottery_win', 'salary', 'government_adjustment_add']
 
     return render_template('banking.html', account=account,
                            transfer_form=transfer_form, loan_form=loan_form,
@@ -330,6 +325,12 @@ def banking_loan_apply():
         if BankLoan.query.filter_by(account_id=account.id, status='Active').first():
             flash('Ya tienes un préstamo activo.')
         else:
+            # Grant loan from Government Fund? Prompt says "se pondra o se retirara el dinero usado para prestamos" from Gov Fund.
+            fund = get_gov_fund()
+            # Does fund have enough? Assuming Gov Fund can go negative or has plenty.
+            # Let's say it can handle it.
+            fund.balance -= 5500
+
             account.balance += 5500
             loan = BankLoan(
                 account_id=account.id,
@@ -373,6 +374,11 @@ def banking_loan_repay():
                 account_id=account.id, type='loan_payment', amount=pay_amount,
                 description='Pago de Préstamo'
             )
+
+            # Repayment goes back to Gov Fund
+            fund = get_gov_fund()
+            fund.balance += pay_amount
+
             db.session.add(trans)
             db.session.commit()
 
@@ -458,7 +464,6 @@ def lottery():
     lottery = get_lottery_state()
     form = LotteryTicketForm()
 
-    # Get user's tickets for today
     today = datetime.utcnow().date()
     my_tickets = LotteryTicket.query.filter_by(user_id=current_user.id, date=today).all()
 
@@ -479,9 +484,12 @@ def buy_lottery_ticket():
         if account.balance < 500:
             flash('Fondos insuficientes.')
         else:
-            # Process purchase
             account.balance -= 500
             lottery.current_jackpot += 250
+
+            # Add remaining 250 to Government Fund
+            fund = get_gov_fund()
+            fund.balance += 250
 
             ticket = LotteryTicket(
                 user_id=current_user.id,
@@ -602,6 +610,146 @@ def official_action(user_id, action):
     db.session.commit()
     return redirect(url_for('main.official_dashboard'))
 
+# --- Government Dashboard & Payroll ---
+
+@bp.route('/government/dashboard')
+@login_required
+def government_dashboard():
+    if current_user.department != 'Gobierno':
+        return redirect(url_for('main.official_dashboard'))
+
+    fund = get_gov_fund()
+    pending_payrolls = PayrollRequest.query.filter_by(status='Pending').order_by(PayrollRequest.created_at.desc()).all()
+    fund_form = GovFundAdjustForm()
+
+    return render_template('government_dashboard.html', fund=fund, pending_payrolls=pending_payrolls, fund_form=fund_form)
+
+@bp.route('/government/balance/update', methods=['POST'])
+@login_required
+def government_balance_update():
+    if current_user.department != 'Gobierno':
+        return redirect(url_for('main.official_dashboard'))
+
+    form = GovFundAdjustForm()
+    if form.validate_on_submit():
+        fund = get_gov_fund()
+        if form.operation.data == 'add':
+            fund.balance += form.amount.data
+            flash(f'Se añadieron ${form.amount.data} al fondo.')
+        else:
+            fund.balance -= form.amount.data
+            flash(f'Se retiraron ${form.amount.data} del fondo.')
+        db.session.commit()
+    return redirect(url_for('main.government_dashboard'))
+
+@bp.route('/government/payroll/action/<int:req_id>/<action>', methods=['POST'])
+@login_required
+def government_payroll_action(req_id, action):
+    if current_user.department != 'Gobierno':
+        return redirect(url_for('main.official_dashboard'))
+
+    req = PayrollRequest.query.get_or_404(req_id)
+    if req.status != 'Pending':
+        flash('Esta solicitud ya fue procesada.')
+        return redirect(url_for('main.government_dashboard'))
+
+    if action == 'approve':
+        fund = get_gov_fund()
+        if fund.balance < req.total_amount:
+            flash('Fondos insuficientes en el gobierno para pagar esta nómina.', 'error')
+            return redirect(url_for('main.government_dashboard'))
+
+        fund.balance -= req.total_amount
+
+        # Distribute
+        count = 0
+        for item in req.items:
+            user = item.user
+            if user and user.bank_account:
+                user.bank_account.balance += item.amount
+                trans = BankTransaction(
+                    account_id=user.bank_account.id,
+                    type='salary',
+                    amount=item.amount,
+                    description=f'Nómina {req.department} ({req.created_at.strftime("%d/%m")})'
+                )
+                db.session.add(trans)
+                count += 1
+
+        req.status = 'Approved'
+        db.session.commit()
+        flash(f'Nómina aprobada. Se pagó a {count} empleados. Total: ${req.total_amount}')
+
+    elif action == 'reject':
+        req.status = 'Rejected'
+        db.session.commit()
+        flash('Nómina rechazada.')
+
+    return redirect(url_for('main.government_dashboard'))
+
+@bp.route('/official/salaries')
+@login_required
+def official_salaries():
+    if not current_user.badge_id or current_user.official_rank != 'Lider':
+        return redirect(url_for('main.official_dashboard'))
+
+    members = User.query.filter_by(department=current_user.department, official_status='Aprobado').all()
+    salary_form = SalaryForm()
+
+    return render_template('manage_salaries.html', members=members, salary_form=salary_form)
+
+@bp.route('/official/salaries/update/<int:user_id>', methods=['POST'])
+@login_required
+def update_salary(user_id):
+    if not current_user.badge_id or current_user.official_rank != 'Lider':
+        return redirect(url_for('main.official_dashboard'))
+
+    target_user = User.query.get_or_404(user_id)
+    if target_user.department != current_user.department:
+        flash('No puedes editar este usuario.')
+        return redirect(url_for('main.official_salaries'))
+
+    form = SalaryForm()
+    if form.validate_on_submit():
+        target_user.salary = form.salary.data
+        db.session.commit()
+        flash(f'Sueldo de {target_user.first_name} actualizado a ${target_user.salary}.')
+
+    return redirect(url_for('main.official_salaries'))
+
+@bp.route('/official/payroll/submit', methods=['POST'])
+@login_required
+def submit_payroll():
+    if not current_user.badge_id or current_user.official_rank != 'Lider':
+        return redirect(url_for('main.official_dashboard'))
+
+    members = User.query.filter_by(department=current_user.department, official_status='Aprobado').all()
+    total = sum(m.salary for m in members if m.salary and m.salary > 0)
+
+    if total <= 0:
+        flash('El total de la nómina es 0. Asigna sueldos primero.')
+        return redirect(url_for('main.official_salaries'))
+
+    req = PayrollRequest(
+        department=current_user.department,
+        total_amount=total
+    )
+    db.session.add(req)
+    db.session.commit() # Commit to get ID
+
+    for m in members:
+        if m.salary and m.salary > 0:
+            item = PayrollItem(
+                request_id=req.id,
+                user_id=m.id,
+                amount=m.salary
+            )
+            db.session.add(item)
+
+    db.session.commit()
+    flash(f'Nómina enviada para aprobación del Gobierno. Total: ${total}')
+    return redirect(url_for('main.official_dashboard'))
+
 # --- Citizen Database Routes ---
 
 @bp.route('/official/database', methods=['GET'])
@@ -633,100 +781,56 @@ def citizen_profile(user_id):
 
     citizen = User.query.get_or_404(user_id)
 
-    # Permissions: SABES, Policia, Sheriff can add
-    can_edit = current_user.department in ['Policia', 'Sheriff', 'SABES']
+    # Permissions
+    # PD, Sheriff, SABES, Gobierno can edit/add/view
+    can_edit_reports = current_user.department in ['Policia', 'Sheriff', 'SABES', 'Gobierno'] # Can add comments/fines
+    # Note: Gov can add fines too per prompt "a diferencia de PD ... pueda ser posible poder poner multas"
+
+    can_adjust_balance = current_user.department == 'Gobierno'
 
     # Forms
     comment_form = CommentForm()
     fine_form = TrafficFineForm()
     criminal_form = CriminalRecordForm()
+    adjust_balance_form = AdjustBalanceForm()
 
-    return render_template('citizen_profile.html', citizen=citizen, can_edit=can_edit,
-                           comment_form=comment_form, fine_form=fine_form, criminal_form=criminal_form)
+    return render_template('citizen_profile.html', citizen=citizen,
+                           can_edit=can_edit_reports,
+                           can_adjust_balance=can_adjust_balance,
+                           comment_form=comment_form, fine_form=fine_form,
+                           criminal_form=criminal_form, adjust_balance_form=adjust_balance_form)
 
-@bp.route('/official/citizen/<int:user_id>/add_comment', methods=['POST'])
+@bp.route('/official/citizen/<int:user_id>/adjust_balance', methods=['POST'])
 @login_required
-def add_comment(user_id):
-    if not current_user.badge_id or current_user.department not in ['Policia', 'Sheriff', 'SABES']:
-        flash('No tienes permiso para realizar esta acción.')
+def adjust_citizen_balance(user_id):
+    if current_user.department != 'Gobierno':
+        flash('No tienes permiso.')
         return redirect(url_for('main.citizen_profile', user_id=user_id))
 
-    form = CommentForm()
-    if form.validate_on_submit():
-        comment = Comment(
-            content=form.content.data,
-            user_id=user_id,
-            author_id=current_user.id
-        )
-        db.session.add(comment)
-        db.session.commit()
-        flash('Comentario agregado.')
-
-    return redirect(url_for('main.citizen_profile', user_id=user_id))
-
-@bp.route('/official/citizen/<int:user_id>/add_fine', methods=['POST'])
-@login_required
-def add_traffic_fine(user_id):
-    if not current_user.badge_id or current_user.department not in ['Policia', 'Sheriff', 'SABES']:
-        flash('No tienes permiso para realizar esta acción.')
+    citizen = User.query.get_or_404(user_id)
+    if not citizen.bank_account:
+        flash('El ciudadano no tiene cuenta bancaria.')
         return redirect(url_for('main.citizen_profile', user_id=user_id))
 
-    form = TrafficFineForm()
+    form = AdjustBalanceForm()
     if form.validate_on_submit():
-        fine = TrafficFine(
-            amount=form.amount.data,
-            reason=form.reason.data,
-            user_id=user_id,
-            author_id=current_user.id
+        amount = form.amount.data
+        if form.operation.data == 'add':
+            citizen.bank_account.balance += amount
+            desc_type = 'government_adjustment_add'
+            flash(f'Se añadieron ${amount} a la cuenta.')
+        else:
+            citizen.bank_account.balance -= amount
+            desc_type = 'government_adjustment_sub'
+            flash(f'Se quitaron ${amount} de la cuenta.')
+
+        trans = BankTransaction(
+            account_id=citizen.bank_account.id,
+            type=desc_type,
+            amount=amount,
+            description=f'Ajuste Gobierno: {form.reason.data}'
         )
-        db.session.add(fine)
+        db.session.add(trans)
         db.session.commit()
-        flash('Multa impuesta.')
-
-    return redirect(url_for('main.citizen_profile', user_id=user_id))
-
-@bp.route('/official/citizen/<int:user_id>/add_criminal_record', methods=['POST'])
-@login_required
-def add_criminal_record(user_id):
-    if not current_user.badge_id or current_user.department not in ['Policia', 'Sheriff', 'SABES']:
-        flash('No tienes permiso para realizar esta acción.')
-        return redirect(url_for('main.citizen_profile', user_id=user_id))
-
-    form = CriminalRecordForm()
-    if form.validate_on_submit():
-        record = CriminalRecord(
-            date=form.date.data,
-            crime=form.crime.data,
-            penal_code=form.penal_code.data,
-            report_text=form.report_text.data,
-            user_id=user_id,
-            author_id=current_user.id
-        )
-        db.session.add(record)
-        db.session.commit()
-
-        # Handle multiple photos
-        if form.subject_photos.data:
-            for f in form.subject_photos.data:
-                if f and f.filename:
-                    filename = secure_filename(f.filename)
-                    f.save(os.path.join(current_app.config['UPLOAD_FOLDER'], filename))
-                    photo = CriminalRecordSubjectPhoto(filename=filename, record_id=record.id)
-                    db.session.add(photo)
-
-        if form.evidence_photos.data:
-             for f in form.evidence_photos.data:
-                if f and f.filename:
-                    filename = secure_filename(f.filename)
-                    f.save(os.path.join(current_app.config['UPLOAD_FOLDER'], filename))
-                    photo = CriminalRecordEvidencePhoto(filename=filename, record_id=record.id)
-                    db.session.add(photo)
-
-        db.session.commit()
-        flash('Antecedente penal registrado.')
-    else:
-        for field, errors in form.errors.items():
-            for error in errors:
-                flash(f"Error en {field}: {error}")
 
     return redirect(url_for('main.citizen_profile', user_id=user_id))

@@ -82,6 +82,14 @@
 
         <div style="margin-bottom: 20px;">
             <a href="{{ url_for('main.official_database') }}" class="btn" style="background-color: #3498db; color: white; padding: 10px 20px; font-size: 16px;">Acceder a Base de Datos de Ciudadanos</a>
+
+            {% if current_user.department == 'Gobierno' %}
+                <a href="{{ url_for('main.government_dashboard') }}" class="btn" style="background-color: #8e44ad; color: white; padding: 10px 20px; font-size: 16px;">Panel de Gobierno</a>
+            {% endif %}
+
+            {% if current_user.official_rank == 'Lider' %}
+                <a href="{{ url_for('main.official_salaries') }}" class="btn" style="background-color: #27ae60; color: white; padding: 10px 20px; font-size: 16px;">Gestionar Sueldos</a>
+            {% endif %}
         </div>
 
         {% with messages = get_flashed_messages() %}
