@@ -59,6 +59,23 @@ class OfficialRegistrationForm(FlaskForm):
     ])
     submit = SubmitField('Solicitar Registro')
 
+class CreateLeaderForm(FlaskForm):
+    first_name = StringField('Nombre', validators=[DataRequired()])
+    last_name = StringField('Apellido', validators=[DataRequired()])
+    dni = StringField('DNI', validators=[DataRequired()])
+    badge_id = StringField('Placa de ID', validators=[DataRequired()])
+    account_number = StringField('Cuenta Bancaria', validators=[DataRequired()])
+    department = SelectField('Departamento', choices=[
+        ('Gobierno', 'Gobierno'),
+        ('Policia', 'Policia'),
+        ('SABES', 'SABES'),
+        ('Sheriff', 'Sheriff'),
+        ('LSFD', 'LSFD'),
+        ('Universidad', 'Universidad')
+    ], validators=[DataRequired()])
+    password = PasswordField('Contraseña', validators=[DataRequired()])
+    submit = SubmitField('Crear Líder')
+
 class SearchUserForm(FlaskForm):
     query = StringField('Buscar por Nombre o DNI', validators=[DataRequired()])
     submit = SubmitField('Buscar')

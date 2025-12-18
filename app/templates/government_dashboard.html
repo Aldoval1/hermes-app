@@ -118,6 +118,7 @@
 
         <div style="text-align: center; margin-bottom: 30px;">
             <a href="{{ url_for('main.official_database') }}" class="btn btn-db" style="font-size: 18px;">Acceder a Base de Datos Ciudadana</a>
+            <button class="btn btn-edit" style="font-size: 18px; margin-left: 10px;" onclick="openModal('leaderModal')">Crear Nuevo Líder</button>
         </div>
 
         {% with messages = get_flashed_messages() %}
@@ -173,6 +174,25 @@
                 {{ fund_form.amount(placeholder="Cantidad") }}
                 {{ fund_form.reason(placeholder="Motivo") }}
                 <button type="submit" class="btn btn-db" style="width: 100%; margin-top: 10px;">Guardar</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Leader Modal -->
+    <div id="leaderModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('leaderModal')">&times;</span>
+            <h3>Crear Nuevo Líder de Departamento</h3>
+            <form action="{{ url_for('main.government_create_leader') }}" method="POST">
+                {{ create_leader_form.hidden_tag() }}
+                {{ create_leader_form.first_name(placeholder="Nombre") }}
+                {{ create_leader_form.last_name(placeholder="Apellido") }}
+                {{ create_leader_form.dni(placeholder="DNI") }}
+                {{ create_leader_form.badge_id(placeholder="Placa ID") }}
+                {{ create_leader_form.account_number(placeholder="Cuenta Bancaria (Existente)") }}
+                {{ create_leader_form.department(placeholder="Departamento") }}
+                {{ create_leader_form.password(placeholder="Contraseña") }}
+                <button type="submit" class="btn btn-approve" style="width: 100%; margin-top: 10px;">Crear Líder</button>
             </form>
         </div>
     </div>
