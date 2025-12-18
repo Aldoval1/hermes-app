@@ -1,5 +1,5 @@
 from flask_wtf import FlaskForm
-from wtforms import StringField, PasswordField, SubmitField, BooleanField, SelectField, TextAreaField, FloatField, DateField, MultipleFileField
+from wtforms import StringField, PasswordField, SubmitField, BooleanField, SelectField, TextAreaField, FloatField, DateField, MultipleFileField, TimeField
 from flask_wtf.file import FileField, FileRequired, FileAllowed
 from wtforms.validators import DataRequired, EqualTo, NumberRange, Length, Regexp
 
@@ -143,3 +143,9 @@ class GovFundAdjustForm(FlaskForm):
 class SalaryForm(FlaskForm):
     salary = FloatField('Salario', validators=[DataRequired(), NumberRange(min=0)])
     submit = SubmitField('Guardar')
+
+class AppointmentForm(FlaskForm):
+    date = DateField('Fecha', format='%Y-%m-%d', validators=[DataRequired()])
+    time = TimeField('Hora', format='%H:%M', validators=[DataRequired()])
+    description = TextAreaField('Motivo de la Cita', validators=[DataRequired()])
+    submit = SubmitField('Solicitar Cita')

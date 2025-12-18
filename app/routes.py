@@ -2,24 +2,27 @@ import os
 import random
 import string
 from datetime import datetime, timedelta, date
-from flask import render_template, flash, redirect, url_for, request, current_app, jsonify
+from flask import render_template, flash, redirect, url_for, request, current_app, jsonify, make_response
 from app import db
 from app.forms import (
     LoginForm, RegistrationForm, OfficialLoginForm, OfficialRegistrationForm,
     SearchUserForm, CriminalRecordForm, TrafficFineForm, CommentForm,
     TransferForm, LoanForm, LoanRepayForm, SavingsForm, CardCustomizationForm,
-    LotteryTicketForm, AdjustBalanceForm, GovFundAdjustForm, SalaryForm
+    LotteryTicketForm, AdjustBalanceForm, GovFundAdjustForm, SalaryForm, AppointmentForm
 )
 from app.models import (
     User, Comment, TrafficFine, License, CriminalRecord,
     CriminalRecordSubjectPhoto, CriminalRecordEvidencePhoto,
     BankAccount, BankTransaction, BankLoan, BankSavings,
-    Lottery, LotteryTicket, GovernmentFund, PayrollRequest, PayrollItem
+    Lottery, LotteryTicket, GovernmentFund, PayrollRequest, PayrollItem,
+    Appointment
 )
 from flask_login import current_user, login_user, logout_user, login_required
 from flask import Blueprint
 from werkzeug.utils import secure_filename
 from sqlalchemy import or_
+from fpdf import FPDF
+import io
 
 bp = Blueprint('main', __name__)
 
@@ -218,6 +221,138 @@ def pay_fine(fine_id):
 
     flash(f'Multa de ${fine.amount} pagada con éxito.')
     return redirect(url_for('main.my_fines'))
+
+# --- Appointments Routes ---
+
+@bp.route('/appointments')
+@login_required
+def appointments():
+    if current_user.badge_id:
+        return redirect(url_for('main.official_dashboard'))
+
+    officials = User.query.filter_by(department='Gobierno', official_status='Aprobado').all()
+    form = AppointmentForm()
+
+    return render_template('appointments.html', officials=officials, form=form)
+
+@bp.route('/appointments/book/<int:official_id>', methods=['POST'])
+@login_required
+def book_appointment(official_id):
+    form = AppointmentForm()
+    if form.validate_on_submit():
+        official = User.query.get_or_404(official_id)
+        if official.department != 'Gobierno':
+            flash('Solo puedes solicitar citas con funcionarios del Gobierno.')
+            return redirect(url_for('main.appointments'))
+
+        combined_dt = datetime.combine(form.date.data, form.time.data)
+
+        appt = Appointment(
+            citizen_id=current_user.id,
+            official_id=official.id,
+            date=combined_dt,
+            reason=form.description.data,
+            status='Pending'
+        )
+        db.session.add(appt)
+        db.session.commit()
+        flash('Cita solicitada con éxito.')
+    else:
+        flash('Error al solicitar la cita. Revisa los datos.')
+
+    return redirect(url_for('main.appointments'))
+
+# --- My Documents Routes ---
+
+@bp.route('/my_documents')
+@login_required
+def my_documents():
+    if current_user.badge_id:
+        return redirect(url_for('main.official_dashboard'))
+
+    # Calculate account age
+    if current_user.created_at:
+        account_age = (datetime.utcnow() - current_user.created_at).days
+    else:
+        account_age = 0
+
+    return render_template('my_documents.html', account_age=account_age)
+
+@bp.route('/my_documents/download_criminal_record')
+@login_required
+def download_criminal_record():
+    records = current_user.criminal_records
+
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+
+    # Header
+    pdf.set_font("Arial", 'B', 16)
+    pdf.cell(200, 10, txt="Reporte de Antecedentes Penales", ln=True, align='C')
+    pdf.ln(10)
+
+    # User Info
+    pdf.set_font("Arial", size=12)
+    pdf.cell(200, 8, txt=f"Ciudadano: {current_user.first_name} {current_user.last_name}", ln=True)
+    pdf.cell(200, 8, txt=f"DNI: {current_user.dni}", ln=True)
+    pdf.cell(200, 8, txt=f"Fecha de Emisión: {datetime.utcnow().strftime('%d/%m/%Y %H:%M')}", ln=True)
+    pdf.ln(10)
+
+    if not records:
+        pdf.cell(200, 10, txt="No se encontraron antecedentes penales.", ln=True)
+    else:
+        for record in records:
+            pdf.set_font("Arial", 'B', 12)
+            pdf.cell(200, 8, txt=f"Delito: {record.crime} (CP: {record.penal_code})", ln=True)
+            pdf.set_font("Arial", size=12)
+            pdf.cell(200, 6, txt=f"Fecha: {record.date.strftime('%d/%m/%Y')}", ln=True)
+            pdf.multi_cell(0, 6, txt=f"Informe: {record.report_text}")
+
+            # Images
+            # Note: FPDF image requires file path.
+            if record.subject_photos:
+                pdf.ln(5)
+                pdf.cell(200, 6, txt="Fotos del Sujeto:", ln=True)
+                y_before = pdf.get_y()
+                x_start = 10
+                for photo in record.subject_photos:
+                    img_path = os.path.join(current_app.config['UPLOAD_FOLDER'], photo.filename)
+                    if os.path.exists(img_path):
+                        # Simple layout: add image, maybe new page if big.
+                        # Scaling image to width 50
+                        pdf.image(img_path, x=x_start, y=pdf.get_y(), w=50)
+                        x_start += 55
+                        if x_start > 150: # Wrap row
+                            x_start = 10
+                            pdf.ln(55) # Approx height of image + gap
+                pdf.ln(60) # Space after image row
+
+            if record.evidence_photos:
+                pdf.ln(5)
+                pdf.cell(200, 6, txt="Evidencia:", ln=True)
+                y_before = pdf.get_y()
+                x_start = 10
+                for photo in record.evidence_photos:
+                    img_path = os.path.join(current_app.config['UPLOAD_FOLDER'], photo.filename)
+                    if os.path.exists(img_path):
+                        pdf.image(img_path, x=x_start, y=pdf.get_y(), w=50)
+                        x_start += 55
+                        if x_start > 150:
+                            x_start = 10
+                            pdf.ln(55)
+                pdf.ln(60)
+
+            pdf.ln(10)
+            pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+            pdf.ln(10)
+
+    # fpdf2 output() returns bytes (if dest='S') or bytearray. No need to encode.
+    pdf_bytes = pdf.output()
+    response = make_response(bytes(pdf_bytes))
+    response.headers['Content-Type'] = 'application/pdf'
+    response.headers['Content-Disposition'] = f'attachment; filename=antecedentes_{current_user.dni}.pdf'
+    return response
 
 # --- Banking Routes ---
 

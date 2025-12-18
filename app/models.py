@@ -21,6 +21,9 @@ class User(UserMixin, db.Model):
     # Salary
     salary = db.Column(db.Float, default=0.0)
 
+    # Meta
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
     # Relationships
     comments = db.relationship('Comment', foreign_keys='Comment.user_id', backref='citizen', lazy=True)
     traffic_fines = db.relationship('TrafficFine', foreign_keys='TrafficFine.user_id', backref='citizen', lazy=True)
@@ -32,6 +35,10 @@ class User(UserMixin, db.Model):
 
     # Lottery
     lottery_tickets = db.relationship('LotteryTicket', backref='owner', lazy=True)
+
+    # Appointments
+    appointments = db.relationship('Appointment', foreign_keys='Appointment.citizen_id', backref='citizen', lazy=True)
+    appointments_received = db.relationship('Appointment', foreign_keys='Appointment.official_id', backref='official', lazy=True)
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -165,3 +172,12 @@ class PayrollItem(db.Model):
     amount = db.Column(db.Float, nullable=False)
 
     user = db.relationship('User')
+
+# Appointments
+class Appointment(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    citizen_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    official_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    date = db.Column(db.DateTime, nullable=False)
+    reason = db.Column(db.String(200), nullable=False)
+    status = db.Column(db.String(20), default='Pending') # Pending, Approved, Rejected
