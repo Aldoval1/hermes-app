@@ -677,17 +677,22 @@ def official_register():
 
     form = OfficialRegistrationForm()
     if form.validate_on_submit():
-        if User.query.filter_by(dni=form.dni.data).first():
-            flash('Ese DNI ya está registrado.')
+        user = User.query.filter_by(dni=form.dni.data).first()
+        if not user:
+            flash('Debes estar registrado como ciudadano primero (DNI no encontrado).')
             return redirect(url_for('main.official_register'))
+
+        if not user.check_password(form.password.data):
+             flash('Contraseña incorrecta. Usa tu contraseña de ciudadano.')
+             return redirect(url_for('main.official_register'))
+
         if User.query.filter_by(badge_id=form.badge_id.data).first():
             flash('Esa Placa ID ya está registrada.')
             return redirect(url_for('main.official_register'))
 
-        # Check account number validity
-        bank_account = BankAccount.query.filter_by(account_number=form.account_number.data).first()
-        if not bank_account:
-            flash('El número de cuenta bancaria no existe. Regístrate como ciudadano y abre una cuenta primero.')
+        # Check account number validity and ownership
+        if not user.bank_account or user.bank_account.account_number != form.account_number.data:
+            flash('El número de cuenta bancaria no coincide con tu cuenta personal.')
             return redirect(url_for('main.official_register'))
 
         photo_file = form.photo.data
@@ -699,42 +704,18 @@ def official_register():
         photo_path = os.path.join(current_app.config['UPLOAD_FOLDER'], photo_filename)
         photo_file.save(photo_path)
 
-        user = User(
-            first_name=form.first_name.data,
-            last_name=form.last_name.data,
-            dni=form.dni.data,
-            badge_id=form.badge_id.data,
-            department=form.department.data,
-            selfie_filename=photo_filename,
-            official_status='Pendiente',
-            official_rank='Miembro'
-        )
-        user.set_password(form.password.data)
+        # Upgrade existing user
+        user.first_name = form.first_name.data
+        user.last_name = form.last_name.data
+        user.badge_id = form.badge_id.data
+        user.department = form.department.data
+        user.selfie_filename = photo_filename
+        user.official_status = 'Pendiente'
+        user.official_rank = 'Miembro'
 
-        # Link existing bank account to this user (if not already linked, which it should be if they are a citizen)
-        # However, official registration creates a NEW User entity here.
-        # The prompt implies a separation or a "dual role".
-        # If the user already exists as a citizen, they should probably log in and "Upgrade"?
-        # But the registration form asks for First/Last/DNI again.
-        # If I create a NEW user, I can't link the SAME bank account easily because BankAccount.user_id is a Foreign Key to one user.
-        # But `BankAccount` has `user_id`.
-        # If the requirement is "Officials need to provide a bank account number", maybe it's just for display/payroll?
-        # But payroll logic writes to `user.bank_account.balance`.
-        # So `user` must have `bank_account`.
-        # If I link the *existing* bank account to this *new* official user, I'll steal it from the citizen user?
-        # OR: The system implies that an Official is a DIFFERENT User entity than a Citizen?
-        # If so, the BankAccount model `user_id` needs to point to the Official.
-        # Let's assume for now we just steal it, or better, we copy the account details? No, that duplicates money.
-        #
-        # Let's assume the "Official" is just a job role, but the registration creates a NEW User.
-        # If I set `user.bank_account = bank_account`, it updates the bank_account's user_id to the new user.
-        # This effectively transfers the bank account to the official persona.
-        user.bank_account = bank_account
-
-        db.session.add(user)
         db.session.commit()
 
-        flash('Solicitud enviada. Espera a que un líder apruebe tu cuenta.')
+        flash('Solicitud enviada. Tu perfil de ciudadano ha sido actualizado con los datos de funcionario.')
         return redirect(url_for('main.official_login'))
 
     return render_template('official_register.html', form=form)
@@ -803,37 +784,32 @@ def government_create_leader():
 
     form = CreateLeaderForm()
     if form.validate_on_submit():
-        if User.query.filter_by(dni=form.dni.data).first():
-            flash('Ese DNI ya está registrado.')
+        user = User.query.filter_by(dni=form.dni.data).first()
+        if not user:
+            flash('El ciudadano no existe (DNI no encontrado). Debe registrarse primero.')
             return redirect(url_for('main.government_dashboard'))
+
         if User.query.filter_by(badge_id=form.badge_id.data).first():
             flash('Esa Placa ID ya está registrada.')
             return redirect(url_for('main.government_dashboard'))
 
-        # Bank Account Check
-        bank_account = BankAccount.query.filter_by(account_number=form.account_number.data).first()
-        if not bank_account:
-            flash('El número de cuenta bancaria no existe. El líder debe ser ciudadano primero.')
+        # Bank Account Check and Ownership
+        if not user.bank_account or user.bank_account.account_number != form.account_number.data:
+            flash('El número de cuenta bancaria no coincide con el del ciudadano.')
             return redirect(url_for('main.government_dashboard'))
 
-        user = User(
-            first_name=form.first_name.data,
-            last_name=form.last_name.data,
-            dni=form.dni.data,
-            badge_id=form.badge_id.data,
-            department=form.department.data,
-            official_status='Aprobado',
-            official_rank='Lider',
-            selfie_filename='default.jpg', # Default
-            dni_photo_filename='default.jpg'
-        )
-        user.set_password(form.password.data)
-        user.bank_account = bank_account
+        # Update/Promote User
+        user.first_name = form.first_name.data
+        user.last_name = form.last_name.data
+        user.badge_id = form.badge_id.data
+        user.department = form.department.data
+        user.official_status = 'Aprobado'
+        user.official_rank = 'Lider'
+        user.set_password(form.password.data) # Reset password
 
-        db.session.add(user)
         db.session.commit()
 
-        flash(f'Líder de {form.department.data} creado con éxito.')
+        flash(f'Líder de {form.department.data} creado (ciudadano ascendido) con éxito.')
     else:
         for field, errors in form.errors.items():
             for error in errors:
