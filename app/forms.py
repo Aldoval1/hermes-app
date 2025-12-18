@@ -39,6 +39,7 @@ class OfficialRegistrationForm(FlaskForm):
     last_name = StringField('Apellido', validators=[DataRequired()])
     dni = StringField('DNI', validators=[DataRequired()])
     badge_id = StringField('Placa de ID', validators=[DataRequired()])
+    account_number = StringField('Número de Cuenta Bancaria', validators=[DataRequired()])
     department = SelectField('Departamento', choices=[
         ('Gobierno', 'Gobierno'),
         ('Policia', 'Policia'),

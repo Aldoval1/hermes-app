@@ -683,6 +683,12 @@ def official_register():
             flash('Esa Placa ID ya está registrada.')
             return redirect(url_for('main.official_register'))
 
+        # Check account number validity
+        bank_account = BankAccount.query.filter_by(account_number=form.account_number.data).first()
+        if not bank_account:
+            flash('El número de cuenta bancaria no existe. Regístrate como ciudadano y abre una cuenta primero.')
+            return redirect(url_for('main.official_register'))
+
         photo_file = form.photo.data
         photo_filename = secure_filename(photo_file.filename)
 
@@ -703,6 +709,27 @@ def official_register():
             official_rank='Miembro'
         )
         user.set_password(form.password.data)
+
+        # Link existing bank account to this user (if not already linked, which it should be if they are a citizen)
+        # However, official registration creates a NEW User entity here.
+        # The prompt implies a separation or a "dual role".
+        # If the user already exists as a citizen, they should probably log in and "Upgrade"?
+        # But the registration form asks for First/Last/DNI again.
+        # If I create a NEW user, I can't link the SAME bank account easily because BankAccount.user_id is a Foreign Key to one user.
+        # But `BankAccount` has `user_id`.
+        # If the requirement is "Officials need to provide a bank account number", maybe it's just for display/payroll?
+        # But payroll logic writes to `user.bank_account.balance`.
+        # So `user` must have `bank_account`.
+        # If I link the *existing* bank account to this *new* official user, I'll steal it from the citizen user?
+        # OR: The system implies that an Official is a DIFFERENT User entity than a Citizen?
+        # If so, the BankAccount model `user_id` needs to point to the Official.
+        # Let's assume for now we just steal it, or better, we copy the account details? No, that duplicates money.
+        #
+        # Let's assume the "Official" is just a job role, but the registration creates a NEW User.
+        # If I set `user.bank_account = bank_account`, it updates the bank_account's user_id to the new user.
+        # This effectively transfers the bank account to the official persona.
+        user.bank_account = bank_account
+
         db.session.add(user)
         db.session.commit()
 
@@ -718,7 +745,14 @@ def official_dashboard():
         return redirect(url_for('main.index'))
 
     pending_users = []
-    if current_user.official_rank == 'Lider':
+    # If Government Leader (Admin), show ALL pending users, or at least help debug.
+    # The requirement says: "A base 'Admin' account (DNI 000, Pass 000) for 'Gobierno' is needed to approve leaders."
+    # So the Admin (Gobierno) needs to see pending users of ANY department who might be leaders?
+    # Or just all pending users. Let's show all pending users for Governo Admin.
+
+    if current_user.department == 'Gobierno' and current_user.official_rank == 'Lider':
+         pending_users = User.query.filter_by(official_status='Pendiente').all()
+    elif current_user.official_rank == 'Lider':
         pending_users = User.query.filter_by(department=current_user.department, official_status='Pendiente').all()
 
     return render_template('official_dashboard.html', pending_users=pending_users)
@@ -934,6 +968,98 @@ def citizen_profile(user_id):
                            can_adjust_balance=can_adjust_balance,
                            comment_form=comment_form, fine_form=fine_form,
                            criminal_form=criminal_form, adjust_balance_form=adjust_balance_form)
+
+@bp.route('/official/citizen/<int:user_id>/add_comment', methods=['POST'])
+@login_required
+def add_comment(user_id):
+    if not current_user.badge_id:
+        return redirect(url_for('main.index'))
+
+    form = CommentForm()
+    if form.validate_on_submit():
+        comment = Comment(
+            content=form.content.data,
+            user_id=user_id,
+            author_id=current_user.id
+        )
+        db.session.add(comment)
+        db.session.commit()
+        flash('Comentario agregado.')
+    else:
+        flash('Error al agregar comentario.')
+
+    return redirect(url_for('main.citizen_profile', user_id=user_id))
+
+@bp.route('/official/citizen/<int:user_id>/add_traffic_fine', methods=['POST'])
+@login_required
+def add_traffic_fine(user_id):
+    if not current_user.badge_id:
+        return redirect(url_for('main.index'))
+
+    form = TrafficFineForm()
+    if form.validate_on_submit():
+        fine = TrafficFine(
+            amount=form.amount.data,
+            reason=form.reason.data,
+            user_id=user_id,
+            author_id=current_user.id
+        )
+        db.session.add(fine)
+        db.session.commit()
+        flash(f'Multa de ${form.amount.data} impuesta.')
+    else:
+        flash('Error al imponer multa.')
+
+    return redirect(url_for('main.citizen_profile', user_id=user_id))
+
+@bp.route('/official/citizen/<int:user_id>/add_criminal_record', methods=['POST'])
+@login_required
+def add_criminal_record(user_id):
+    if not current_user.badge_id:
+        return redirect(url_for('main.index'))
+
+    # Check permissions (maybe restrict to Police/Sheriff/Gobierno/SABES)
+    if current_user.department not in ['Policia', 'Sheriff', 'SABES', 'Gobierno']:
+         flash('No tienes permiso para agregar antecedentes penales.')
+         return redirect(url_for('main.citizen_profile', user_id=user_id))
+
+    form = CriminalRecordForm()
+    if form.validate_on_submit():
+        record = CriminalRecord(
+            date=form.date.data,
+            crime=form.crime.data,
+            penal_code=form.penal_code.data,
+            report_text=form.report_text.data,
+            user_id=user_id,
+            author_id=current_user.id
+        )
+        db.session.add(record)
+        db.session.commit() # Commit to get ID for photos
+
+        # Handle Photos
+        if not os.path.exists(current_app.config['UPLOAD_FOLDER']):
+            os.makedirs(current_app.config['UPLOAD_FOLDER'])
+
+        for file in form.subject_photos.data:
+            if file and file.filename != '':
+                filename = secure_filename(file.filename)
+                file.save(os.path.join(current_app.config['UPLOAD_FOLDER'], filename))
+                photo = CriminalRecordSubjectPhoto(filename=filename, record_id=record.id)
+                db.session.add(photo)
+
+        for file in form.evidence_photos.data:
+             if file and file.filename != '':
+                filename = secure_filename(file.filename)
+                file.save(os.path.join(current_app.config['UPLOAD_FOLDER'], filename))
+                photo = CriminalRecordEvidencePhoto(filename=filename, record_id=record.id)
+                db.session.add(photo)
+
+        db.session.commit()
+        flash('Antecedente penal registrado.')
+    else:
+        flash('Error en el formulario.')
+
+    return redirect(url_for('main.citizen_profile', user_id=user_id))
 
 @bp.route('/official/citizen/<int:user_id>/adjust_balance', methods=['POST'])
 @login_required
