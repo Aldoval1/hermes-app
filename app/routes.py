@@ -8,7 +8,8 @@ from app.forms import (
     LoginForm, RegistrationForm, OfficialLoginForm, OfficialRegistrationForm,
     SearchUserForm, CriminalRecordForm, TrafficFineForm, CommentForm,
     TransferForm, LoanForm, LoanRepayForm, SavingsForm, CardCustomizationForm,
-    LotteryTicketForm, AdjustBalanceForm, GovFundAdjustForm, SalaryForm, AppointmentForm
+    LotteryTicketForm, AdjustBalanceForm, GovFundAdjustForm, SalaryForm, AppointmentForm,
+    CreateLeaderForm
 )
 from app.models import (
     User, Comment, TrafficFine, License, CriminalRecord,
@@ -790,8 +791,55 @@ def government_dashboard():
     fund = get_gov_fund()
     pending_payrolls = PayrollRequest.query.filter_by(status='Pending').order_by(PayrollRequest.created_at.desc()).all()
     fund_form = GovFundAdjustForm()
+    create_leader_form = CreateLeaderForm()
 
-    return render_template('government_dashboard.html', fund=fund, pending_payrolls=pending_payrolls, fund_form=fund_form)
+    return render_template('government_dashboard.html', fund=fund, pending_payrolls=pending_payrolls, fund_form=fund_form, create_leader_form=create_leader_form)
+
+@bp.route('/government/create_leader', methods=['POST'])
+@login_required
+def government_create_leader():
+    if current_user.department != 'Gobierno':
+        return redirect(url_for('main.official_dashboard'))
+
+    form = CreateLeaderForm()
+    if form.validate_on_submit():
+        if User.query.filter_by(dni=form.dni.data).first():
+            flash('Ese DNI ya está registrado.')
+            return redirect(url_for('main.government_dashboard'))
+        if User.query.filter_by(badge_id=form.badge_id.data).first():
+            flash('Esa Placa ID ya está registrada.')
+            return redirect(url_for('main.government_dashboard'))
+
+        # Bank Account Check
+        bank_account = BankAccount.query.filter_by(account_number=form.account_number.data).first()
+        if not bank_account:
+            flash('El número de cuenta bancaria no existe. El líder debe ser ciudadano primero.')
+            return redirect(url_for('main.government_dashboard'))
+
+        user = User(
+            first_name=form.first_name.data,
+            last_name=form.last_name.data,
+            dni=form.dni.data,
+            badge_id=form.badge_id.data,
+            department=form.department.data,
+            official_status='Aprobado',
+            official_rank='Lider',
+            selfie_filename='default.jpg', # Default
+            dni_photo_filename='default.jpg'
+        )
+        user.set_password(form.password.data)
+        user.bank_account = bank_account
+
+        db.session.add(user)
+        db.session.commit()
+
+        flash(f'Líder de {form.department.data} creado con éxito.')
+    else:
+        for field, errors in form.errors.items():
+            for error in errors:
+                flash(f"Error en {getattr(form, field).label.text}: {error}")
+
+    return redirect(url_for('main.government_dashboard'))
 
 @bp.route('/government/balance/update', methods=['POST'])
 @login_required
