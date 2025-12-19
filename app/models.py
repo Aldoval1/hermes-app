@@ -22,15 +22,10 @@ class User(UserMixin, db.Model):
     salary = db.Column(db.Float, default=0.0)
     salary_account_number = db.Column(db.String(20), nullable=True) # Linked bank account for payroll
 
-    # Discord Integration
-    discord_id = db.Column(db.String(30), nullable=True)
-    discord_verification_requested = db.Column(db.Boolean, default=False)
-
     # Meta
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     # Relationships
-    notifications = db.relationship('Notification', backref='user', lazy=True)
     comments = db.relationship('Comment', foreign_keys='Comment.user_id', backref='citizen', lazy=True)
     traffic_fines = db.relationship('TrafficFine', foreign_keys='TrafficFine.user_id', backref='citizen', lazy=True)
     licenses = db.relationship('License', backref='citizen', lazy=True)
@@ -187,12 +182,3 @@ class Appointment(db.Model):
     date = db.Column(db.DateTime, nullable=False)
     reason = db.Column(db.String(200), nullable=False)
     status = db.Column(db.String(20), default='Pending') # Pending, Approved, Rejected
-
-# Discord Notifications
-class Notification(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    content = db.Column(db.Text, nullable=False)
-    type = db.Column(db.String(20)) # fine, transaction, lottery, verification_success
-    status = db.Column(db.String(20), default='pending') # pending, sent, failed
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)

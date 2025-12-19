@@ -101,7 +101,6 @@
         .card-appointments .icon-container { color: #2980b9; }
         .card-news .icon-container { color: #7f8c8d; }
         .card-social .icon-container { color: #d35400; }
-        .card-discord .icon-container { color: #5865F2; }
 
         {% with messages = get_flashed_messages() %}
         {% if messages %}
@@ -194,14 +193,6 @@
                     <i class="fas fa-hands-helping"></i>
                 </div>
                 <div class="service-title">Planes Sociales</div>
-            </a>
-
-            <!-- Verificación Discord -->
-            <a href="{{ url_for('main.discord_settings') }}" class="service-card card-discord">
-                <div class="icon-container">
-                    <i class="fab fa-discord"></i>
-                </div>
-                <div class="service-title">Verificación Discord</div>
             </a>
         </div>
     </div>
