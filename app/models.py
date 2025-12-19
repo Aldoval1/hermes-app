@@ -7,20 +7,23 @@ class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     first_name = db.Column(db.String(64))
     last_name = db.Column(db.String(64))
-    dni = db.Column(db.String(20), index=True) # unique=False to allow multiple accounts (Citizen & Official) per DNI
+    dni = db.Column(db.String(20), index=True)
     selfie_filename = db.Column(db.String(128))
     dni_photo_filename = db.Column(db.String(128))
     password_hash = db.Column(db.String(128))
+    
+    # NUEVO: Campo para Discord
+    discord_id = db.Column(db.String(32), nullable=True)
 
     # Official fields
     badge_id = db.Column(db.String(20), index=True, unique=True, nullable=True)
     department = db.Column(db.String(50), nullable=True)
-    official_rank = db.Column(db.String(20), default='Miembro') # 'Lider', 'Miembro'
-    official_status = db.Column(db.String(20), default=None) # 'Pendiente', 'Aprobado', 'Rechazado'
+    official_rank = db.Column(db.String(20), default='Miembro')
+    official_status = db.Column(db.String(20), default=None)
 
     # Salary
     salary = db.Column(db.Float, default=0.0)
-    salary_account_number = db.Column(db.String(20), nullable=True) # Linked bank account for payroll
+    salary_account_number = db.Column(db.String(20), nullable=True)
 
     # Meta
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -30,14 +33,8 @@ class User(UserMixin, db.Model):
     traffic_fines = db.relationship('TrafficFine', foreign_keys='TrafficFine.user_id', backref='citizen', lazy=True)
     licenses = db.relationship('License', backref='citizen', lazy=True)
     criminal_records = db.relationship('CriminalRecord', foreign_keys='CriminalRecord.user_id', backref='citizen', lazy=True)
-
-    # Banking
     bank_account = db.relationship('BankAccount', backref='owner', uselist=False)
-
-    # Lottery
     lottery_tickets = db.relationship('LotteryTicket', backref='owner', lazy=True)
-
-    # Appointments
     appointments = db.relationship('Appointment', foreign_keys='Appointment.citizen_id', backref='citizen', lazy=True)
     appointments_received = db.relationship('Appointment', foreign_keys='Appointment.official_id', backref='official', lazy=True)
 
@@ -53,7 +50,6 @@ class Comment(db.Model):
     date = db.Column(db.DateTime, default=datetime.utcnow)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     author_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-
     author = db.relationship('User', foreign_keys=[author_id])
 
 class TrafficFine(db.Model):
@@ -64,7 +60,6 @@ class TrafficFine(db.Model):
     status = db.Column(db.String(20), default='Pendiente')
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     author_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-
     author = db.relationship('User', foreign_keys=[author_id])
 
 class License(db.Model):
@@ -80,12 +75,9 @@ class CriminalRecord(db.Model):
     crime = db.Column(db.String(100), nullable=False)
     penal_code = db.Column(db.String(50))
     report_text = db.Column(db.Text)
-
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     author_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-
     author = db.relationship('User', foreign_keys=[author_id])
-
     subject_photos = db.relationship('CriminalRecordSubjectPhoto', backref='record', lazy=True, cascade="all, delete-orphan")
     evidence_photos = db.relationship('CriminalRecordEvidencePhoto', backref='record', lazy=True, cascade="all, delete-orphan")
 
@@ -99,16 +91,13 @@ class CriminalRecordEvidencePhoto(db.Model):
     filename = db.Column(db.String(128), nullable=False)
     record_id = db.Column(db.Integer, db.ForeignKey('criminal_record.id'), nullable=False)
 
-# Banking Models
-
 class BankAccount(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     account_number = db.Column(db.String(20), unique=True, nullable=False)
     balance = db.Column(db.Float, default=0.0)
-    card_style = db.Column(db.String(20), default='blue') # blue, gold, black, custom
-    custom_image = db.Column(db.String(128)) # filename if custom
+    card_style = db.Column(db.String(20), default='blue')
+    custom_image = db.Column(db.String(128))
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-
     loans = db.relationship('BankLoan', backref='account', lazy=True)
     savings = db.relationship('BankSavings', backref='account', lazy=True)
     transactions = db.relationship('BankTransaction', foreign_keys='BankTransaction.account_id', backref='account', lazy=True)
@@ -116,29 +105,27 @@ class BankAccount(db.Model):
 class BankTransaction(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     account_id = db.Column(db.Integer, db.ForeignKey('bank_account.id'), nullable=False)
-    type = db.Column(db.String(20)) # transfer_in, transfer_out, loan_received, loan_payment, loan_fee, savings_deposit, savings_withdrawal, interest, fine_payment, lottery_ticket, lottery_win, salary, government_adjustment
+    type = db.Column(db.String(20))
     amount = db.Column(db.Float, nullable=False)
-    related_account = db.Column(db.String(20)) # For transfers
+    related_account = db.Column(db.String(20))
     description = db.Column(db.String(100))
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
 
 class BankLoan(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     account_id = db.Column(db.Integer, db.ForeignKey('bank_account.id'), nullable=False)
-    amount_due = db.Column(db.Float, nullable=False) # Starts at 6000
+    amount_due = db.Column(db.Float, nullable=False)
     start_date = db.Column(db.DateTime, default=datetime.utcnow)
-    due_date = db.Column(db.DateTime, nullable=False) # start + 14 days
+    due_date = db.Column(db.DateTime, nullable=False)
     last_penalty_check = db.Column(db.DateTime)
-    status = db.Column(db.String(20), default='Active') # Active, Paid
+    status = db.Column(db.String(20), default='Active')
 
 class BankSavings(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     account_id = db.Column(db.Integer, db.ForeignKey('bank_account.id'), nullable=False)
     amount = db.Column(db.Float, nullable=False)
     deposit_date = db.Column(db.DateTime, default=datetime.utcnow)
-    status = db.Column(db.String(20), default='Active') # Active, Withdrawn
-
-# Lottery Models
+    status = db.Column(db.String(20), default='Active')
 
 class Lottery(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -151,19 +138,16 @@ class LotteryTicket(db.Model):
     numbers = db.Column(db.String(5), nullable=False)
     date = db.Column(db.Date, nullable=False, default=datetime.utcnow().date)
 
-# Government & Payroll Models
-
 class GovernmentFund(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    balance = db.Column(db.Float, default=1000000.0) # Initial seed
+    balance = db.Column(db.Float, default=1000000.0)
 
 class PayrollRequest(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     department = db.Column(db.String(50), nullable=False)
     total_amount = db.Column(db.Float, nullable=False)
-    status = db.Column(db.String(20), default='Pending') # Pending, Approved, Rejected
+    status = db.Column(db.String(20), default='Pending')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-
     items = db.relationship('PayrollItem', backref='request', lazy=True, cascade="all, delete-orphan")
 
 class PayrollItem(db.Model):
@@ -171,14 +155,12 @@ class PayrollItem(db.Model):
     request_id = db.Column(db.Integer, db.ForeignKey('payroll_request.id'), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     amount = db.Column(db.Float, nullable=False)
-
     user = db.relationship('User')
 
-# Appointments
 class Appointment(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     citizen_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     official_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     date = db.Column(db.DateTime, nullable=False)
     reason = db.Column(db.String(200), nullable=False)
-    status = db.Column(db.String(20), default='Pending') # Pending, Approved, Rejected
+    status = db.Column(db.String(20), default='Pending')
