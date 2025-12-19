@@ -111,7 +111,8 @@ def index():
 
     form = LoginForm()
     if form.validate_on_submit():
-        user = User.query.filter_by(dni=form.dni.data).first()
+        # Citizen login: Ensure we don't pick up an official account (which has a badge_id)
+        user = User.query.filter_by(dni=form.dni.data, badge_id=None).first()
         if user is None or not user.check_password(form.password.data):
              flash('DNI o contraseña inválidos')
              return redirect(url_for('main.index'))
@@ -128,7 +129,8 @@ def register():
 
     form = RegistrationForm()
     if form.validate_on_submit():
-        user_exist = User.query.filter_by(dni=form.dni.data).first()
+        # Check if citizen account exists
+        user_exist = User.query.filter_by(dni=form.dni.data, badge_id=None).first()
         if user_exist:
             flash('Ese DNI ya está registrado.')
             return redirect(url_for('main.register'))
@@ -677,12 +679,13 @@ def official_register():
 
     form = OfficialRegistrationForm()
     if form.validate_on_submit():
-        user = User.query.filter_by(dni=form.dni.data).first()
-        if not user:
+        # Find Citizen Account
+        citizen = User.query.filter_by(dni=form.dni.data, badge_id=None).first()
+        if not citizen:
             flash('Debes estar registrado como ciudadano primero (DNI no encontrado).')
             return redirect(url_for('main.official_register'))
 
-        if not user.check_password(form.password.data):
+        if not citizen.check_password(form.password.data):
              flash('Contraseña incorrecta. Usa tu contraseña de ciudadano.')
              return redirect(url_for('main.official_register'))
 
@@ -690,8 +693,8 @@ def official_register():
             flash('Esa Placa ID ya está registrada.')
             return redirect(url_for('main.official_register'))
 
-        # Check account number validity and ownership
-        if not user.bank_account or user.bank_account.account_number != form.account_number.data:
+        # Check account number validity and ownership (Citizen must own it)
+        if not citizen.bank_account or citizen.bank_account.account_number != form.account_number.data:
             flash('El número de cuenta bancaria no coincide con tu cuenta personal.')
             return redirect(url_for('main.official_register'))
 
@@ -704,18 +707,24 @@ def official_register():
         photo_path = os.path.join(current_app.config['UPLOAD_FOLDER'], photo_filename)
         photo_file.save(photo_path)
 
-        # Upgrade existing user
-        user.first_name = form.first_name.data
-        user.last_name = form.last_name.data
-        user.badge_id = form.badge_id.data
-        user.department = form.department.data
-        user.selfie_filename = photo_filename
-        user.official_status = 'Pendiente'
-        user.official_rank = 'Miembro'
+        # Create separate Official User
+        user = User(
+            first_name=form.first_name.data,
+            last_name=form.last_name.data,
+            dni=form.dni.data, # Shared DNI
+            badge_id=form.badge_id.data,
+            department=form.department.data,
+            selfie_filename=photo_filename,
+            official_status='Pendiente',
+            official_rank='Miembro',
+            salary_account_number=form.account_number.data # Link for payroll
+        )
+        user.set_password(form.password.data)
 
+        db.session.add(user)
         db.session.commit()
 
-        flash('Solicitud enviada. Tu perfil de ciudadano ha sido actualizado con los datos de funcionario.')
+        flash('Solicitud enviada. Espera a que un líder apruebe tu cuenta.')
         return redirect(url_for('main.official_login'))
 
     return render_template('official_register.html', form=form)
@@ -784,8 +793,8 @@ def government_create_leader():
 
     form = CreateLeaderForm()
     if form.validate_on_submit():
-        user = User.query.filter_by(dni=form.dni.data).first()
-        if not user:
+        citizen = User.query.filter_by(dni=form.dni.data, badge_id=None).first()
+        if not citizen:
             flash('El ciudadano no existe (DNI no encontrado). Debe registrarse primero.')
             return redirect(url_for('main.government_dashboard'))
 
@@ -794,22 +803,29 @@ def government_create_leader():
             return redirect(url_for('main.government_dashboard'))
 
         # Bank Account Check and Ownership
-        if not user.bank_account or user.bank_account.account_number != form.account_number.data:
+        if not citizen.bank_account or citizen.bank_account.account_number != form.account_number.data:
             flash('El número de cuenta bancaria no coincide con el del ciudadano.')
             return redirect(url_for('main.government_dashboard'))
 
-        # Update/Promote User
-        user.first_name = form.first_name.data
-        user.last_name = form.last_name.data
-        user.badge_id = form.badge_id.data
-        user.department = form.department.data
-        user.official_status = 'Aprobado'
-        user.official_rank = 'Lider'
-        user.set_password(form.password.data) # Reset password
+        # Create separate Official User
+        user = User(
+            first_name=form.first_name.data,
+            last_name=form.last_name.data,
+            dni=form.dni.data,
+            badge_id=form.badge_id.data,
+            department=form.department.data,
+            official_status='Aprobado',
+            official_rank='Lider',
+            selfie_filename='default.jpg', # Default
+            dni_photo_filename='default.jpg',
+            salary_account_number=form.account_number.data
+        )
+        user.set_password(form.password.data)
 
+        db.session.add(user)
         db.session.commit()
 
-        flash(f'Líder de {form.department.data} creado (ciudadano ascendido) con éxito.')
+        flash(f'Líder de {form.department.data} creado con éxito.')
     else:
         for field, errors in form.errors.items():
             for error in errors:
@@ -858,16 +874,23 @@ def government_payroll_action(req_id, action):
         count = 0
         for item in req.items:
             user = item.user
-            if user and user.bank_account:
-                user.bank_account.balance += item.amount
-                trans = BankTransaction(
-                    account_id=user.bank_account.id,
-                    type='salary',
-                    amount=item.amount,
-                    description=f'Nómina {req.department} ({req.created_at.strftime("%d/%m")})'
-                )
-                db.session.add(trans)
-                count += 1
+            if user:
+                target_acc = None
+                if user.salary_account_number:
+                    target_acc = BankAccount.query.filter_by(account_number=user.salary_account_number).first()
+                elif user.bank_account:
+                    target_acc = user.bank_account
+
+                if target_acc:
+                    target_acc.balance += item.amount
+                    trans = BankTransaction(
+                        account_id=target_acc.id,
+                        type='salary',
+                        amount=item.amount,
+                        description=f'Nómina {req.department} ({req.created_at.strftime("%d/%m")})'
+                    )
+                    db.session.add(trans)
+                    count += 1
 
         req.status = 'Approved'
         db.session.commit()
