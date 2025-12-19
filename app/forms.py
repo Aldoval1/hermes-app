@@ -167,11 +167,3 @@ class AppointmentForm(FlaskForm):
     time = TimeField('Hora', format='%H:%M', validators=[DataRequired()])
     description = TextAreaField('Motivo de la Cita', validators=[DataRequired()])
     submit = SubmitField('Solicitar Cita')
-
-class DiscordSettingsForm(FlaskForm):
-    discord_id = StringField('ID de Usuario de Discord', validators=[
-        DataRequired(),
-        Length(min=17, max=20, message='ID de Discord inválido (debe ser numérico de 17-20 dígitos)'),
-        Regexp('^[0-9]*$', message='Solo números')
-    ])
-    submit = SubmitField('Guardar y Verificar')

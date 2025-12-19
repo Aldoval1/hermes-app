@@ -9,14 +9,14 @@ from app.forms import (
     SearchUserForm, CriminalRecordForm, TrafficFineForm, CommentForm,
     TransferForm, LoanForm, LoanRepayForm, SavingsForm, CardCustomizationForm,
     LotteryTicketForm, AdjustBalanceForm, GovFundAdjustForm, SalaryForm, AppointmentForm,
-    CreateLeaderForm, DiscordSettingsForm
+    CreateLeaderForm
 )
 from app.models import (
     User, Comment, TrafficFine, License, CriminalRecord,
     CriminalRecordSubjectPhoto, CriminalRecordEvidencePhoto,
     BankAccount, BankTransaction, BankLoan, BankSavings,
     Lottery, LotteryTicket, GovernmentFund, PayrollRequest, PayrollItem,
-    Appointment, Notification
+    Appointment
 )
 from flask_login import current_user, login_user, logout_user, login_required
 from flask import Blueprint
@@ -73,30 +73,18 @@ def get_lottery_state():
 
         # Draw for tickets bought on the last_run_date (yesterday/previous active day)
         winning_tickets = LotteryTicket.query.filter_by(date=lottery.last_run_date, numbers=winning_number).all()
-        all_tickets = LotteryTicket.query.filter_by(date=lottery.last_run_date).all()
-
-        # Notify losers
-        for ticket in all_tickets:
-            if ticket.numbers != winning_number and ticket.owner:
-                 notif = Notification(user_id=ticket.owner.id, type='lottery', content=f"Lotería {lottery.last_run_date}: Ganador: {winning_number}. Tu ticket {ticket.numbers} no ganó.")
-                 db.session.add(notif)
 
         if winning_tickets:
             prize_per_winner = lottery.current_jackpot / len(winning_tickets)
             for ticket in winning_tickets:
-                if ticket.owner:
-                    # Notify winner
-                    notif = Notification(user_id=ticket.owner.id, type='lottery', content=f"¡Ganaste la lotería! Número: {winning_number}. Premio: ${prize_per_winner:.2f}")
-                    db.session.add(notif)
-
-                    winner_acc = ticket.owner.bank_account
-                    if winner_acc:
-                        winner_acc.balance += prize_per_winner
-                        trans = BankTransaction(
-                            account_id=winner_acc.id, type='lottery_win', amount=prize_per_winner,
-                            description=f'Premio Lotería (Núm: {winning_number})'
-                        )
-                        db.session.add(trans)
+                winner_acc = ticket.owner.bank_account
+                if winner_acc:
+                    winner_acc.balance += prize_per_winner
+                    trans = BankTransaction(
+                        account_id=winner_acc.id, type='lottery_win', amount=prize_per_winner,
+                        description=f'Premio Lotería (Núm: {winning_number})'
+                    )
+                    db.session.add(trans)
             lottery.current_jackpot = 50000.0
 
         lottery.last_run_date = today
@@ -182,24 +170,6 @@ def register():
 def logout():
     logout_user()
     return redirect(url_for('main.index'))
-
-@bp.route('/discord/settings', methods=['GET', 'POST'])
-@login_required
-def discord_settings():
-    if current_user.badge_id:
-        return redirect(url_for('main.official_dashboard'))
-
-    form = DiscordSettingsForm()
-    if form.validate_on_submit():
-        current_user.discord_id = form.discord_id.data
-        current_user.discord_verification_requested = True
-        db.session.commit()
-        flash('ID de Discord actualizado. El bot intentará verificarte pronto.')
-        return redirect(url_for('main.discord_settings'))
-    elif request.method == 'GET':
-        form.discord_id.data = current_user.discord_id
-
-    return render_template('discord_settings.html', form=form)
 
 # --- Citizen Fines Routes ---
 
@@ -479,12 +449,6 @@ def banking_transfer():
 
             db.session.add(trans_out)
             db.session.add(trans_in)
-
-            # Notification
-            if target_acc.owner:
-                notif = Notification(user_id=target_acc.owner.id, type='transaction', content=f"Has recibido ${amount} de {account.owner.first_name} {account.owner.last_name}")
-                db.session.add(notif)
-
             db.session.commit()
             flash(f'Transferencia de ${amount} realizada con éxito.')
 
@@ -1088,11 +1052,6 @@ def add_traffic_fine(user_id):
             author_id=current_user.id
         )
         db.session.add(fine)
-
-        # Notification
-        notif = Notification(user_id=user_id, type='fine', content=f"Has recibido una multa de ${form.amount.data}. Motivo: {form.reason.data}")
-        db.session.add(notif)
-
         db.session.commit()
         flash(f'Multa de ${form.amount.data} impuesta.')
     else:
