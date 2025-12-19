@@ -7,7 +7,7 @@ class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     first_name = db.Column(db.String(64))
     last_name = db.Column(db.String(64))
-    dni = db.Column(db.String(20), index=True, unique=True)
+    dni = db.Column(db.String(20), index=True) # unique=False to allow multiple accounts (Citizen & Official) per DNI
     selfie_filename = db.Column(db.String(128))
     dni_photo_filename = db.Column(db.String(128))
     password_hash = db.Column(db.String(128))
@@ -20,6 +20,7 @@ class User(UserMixin, db.Model):
 
     # Salary
     salary = db.Column(db.Float, default=0.0)
+    salary_account_number = db.Column(db.String(20), nullable=True) # Linked bank account for payroll
 
     # Meta
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
