@@ -93,7 +93,7 @@
             color: #2c3e50;
         }
 
-        /* Specific colors for icons maybe? */
+        /* Specific colors for icons */
         .card-banking .icon-container { color: #27ae60; }
         .card-fines .icon-container { color: #e74c3c; }
         .card-docs .icon-container { color: #f39c12; }
@@ -101,6 +101,79 @@
         .card-appointments .icon-container { color: #2980b9; }
         .card-news .icon-container { color: #7f8c8d; }
         .card-social .icon-container { color: #d35400; }
+        
+        /* --- ESTILOS DISCORD (NUEVO) --- */
+        .card-discord .icon-container { color: #5865F2; }
+        
+        .alert-discord {
+            background-color: #eef2ff; 
+            border: 1px solid #5865F2; 
+            color: #5865F2; 
+            margin-bottom: 20px; 
+            text-align: center; 
+            padding: 15px; 
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+        }
+
+        .btn-discord {
+            background-color: #5865F2;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 8px;
+            text-decoration: none;
+            display: inline-block;
+            font-weight: bold;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.2s;
+        }
+        .btn-discord:hover {
+            background-color: #4752c4;
+        }
+
+        /* --- MODAL STYLES --- */
+        .modal {
+            display: none; 
+            position: fixed; 
+            z-index: 1000; 
+            left: 0;
+            top: 0;
+            width: 100%; 
+            height: 100%; 
+            overflow: auto; 
+            background-color: rgba(0,0,0,0.5); 
+            backdrop-filter: blur(2px);
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: 10% auto; 
+            padding: 30px;
+            border: 1px solid #888;
+            width: 90%; 
+            max-width: 500px;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            position: relative;
+        }
+        .close {
+            color: #aaa;
+            position: absolute;
+            top: 15px;
+            right: 20px;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+        .close:hover {
+            color: #333;
+        }
 
         {% with messages = get_flashed_messages() %}
         {% if messages %}
@@ -113,6 +186,7 @@
             color: #155724;
             border-radius: 4px;
             border: 1px solid #c3e6cb;
+            margin-bottom: 10px;
         }
         {% endif %}
         {% endwith %}
@@ -137,6 +211,15 @@
             </div>
         {% endif %}
         {% endwith %}
+
+        <!-- Notificación de Discord (Solo si no está vinculado) -->
+        {% if not current_user.discord_id %}
+        <div class="alert-discord">
+            <i class="fab fa-discord" style="font-size: 1.5em;"></i> 
+            <span>Vincular con Discord te permite recibir notificaciones en tiempo real.</span>
+            <button onclick="openDiscordModal()" class="btn-discord">Vincular Ahora</button>
+        </div>
+        {% endif %}
 
         <div class="dashboard-grid">
             <!-- Banca Estatal -->
@@ -179,6 +262,14 @@
                 <div class="service-title">Citas</div>
             </a>
 
+            <!-- Discord Oficial (Nueva Card) -->
+            <div class="service-card card-discord" onclick="openDiscordModal()">
+                <div class="icon-container">
+                    <i class="fab fa-discord"></i>
+                </div>
+                <div class="service-title">Discord Oficial</div>
+            </div>
+
             <!-- Hemeroteca Digital -->
             <a href="#" class="service-card card-news">
                 <div class="icon-container">
@@ -196,5 +287,43 @@
             </a>
         </div>
     </div>
+
+    <!-- Modal para verificación de Discord -->
+    <div id="discordModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeDiscordModal()">&times;</span>
+            <h2 style="color: #5865F2;"><i class="fab fa-discord"></i> Verificación</h2>
+            <p>Para verificarte y recibir notificaciones:</p>
+            <ol style="text-align: left; margin: 20px 40px; color: #555;">
+                <li>Únete a nuestro servidor de Discord oficial.</li>
+                <li>Ve al canal de comandos.</li>
+                <li>Escribe el siguiente comando exacto:</li>
+            </ol>
+            <div style="background:#f0f2f5; padding:15px; border-radius:8px; margin:20px 0; font-family: 'Courier New', monospace; font-size: 1.1em; border: 1px solid #ddd; color: #333;">
+                /verificar dni:{{ current_user.dni }}
+            </div>
+            <p style="font-size: 0.9em; color: #777;">El bot verificará tu identidad automáticamente.</p>
+        </div>
+    </div>
+
+    <script>
+        // Lógica del Modal
+        var modal = document.getElementById("discordModal");
+
+        function openDiscordModal() {
+            modal.style.display = "block";
+        }
+
+        function closeDiscordModal() {
+            modal.style.display = "none";
+        }
+
+        // Cerrar si se hace clic fuera del modal
+        window.onclick = function(event) {
+            if (event.target == modal) {
+                modal.style.display = "none";
+            }
+        }
+    </script>
 </body>
 </html>
