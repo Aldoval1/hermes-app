@@ -1,6 +1,7 @@
 import os
 import random
 import string
+import requests  # --- DISCORD INTEGRATION: Necesario para notificaciones
 from datetime import datetime, timedelta, date
 from flask import render_template, flash, redirect, url_for, request, current_app, jsonify, make_response
 from app import db
@@ -28,6 +29,33 @@ import io
 bp = Blueprint('main', __name__)
 
 # --- Helper Functions ---
+
+# --- DISCORD INTEGRATION START ---
+def notify_discord_bot(user, message):
+    """
+    Envía una notificación al bot de Discord si el usuario tiene su cuenta vinculada.
+    """
+    if not user.discord_id:
+        return
+    
+    # Asegúrate de tener esta variable en Railway en el proyecto de la WEB
+    bot_url = os.environ.get('BOT_URL')
+    
+    if not bot_url:
+        print("ADVERTENCIA: Variable 'BOT_URL' no configurada en la Web.")
+        return
+
+    try:
+        payload = {
+            'discord_id': user.discord_id,
+            'message': message
+        }
+        # Timeout corto para no bloquear la web
+        requests.post(f"{bot_url}/notify", json=payload, timeout=2)
+    except Exception as e:
+        print(f"Error enviando notificación a Discord: {e}")
+# --- DISCORD INTEGRATION END ---
+
 def generate_account_number():
     while True:
         # Generate 10 digits
@@ -58,6 +86,9 @@ def check_loan_penalties(account):
                 )
                 db.session.add(trans)
                 db.session.commit()
+                
+                # --- DISCORD NOTIFICATION ---
+                notify_discord_bot(account.owner, f"⚠️ **Cargo por Mora**\nSe ha aplicado una penalización de ${penalty_amount:,.2f} a tu préstamo vencido.")
 
 def get_lottery_state():
     """Ensure lottery record exists and handle daily draw."""
@@ -85,6 +116,8 @@ def get_lottery_state():
                         description=f'Premio Lotería (Núm: {winning_number})'
                     )
                     db.session.add(trans)
+                    # --- DISCORD NOTIFICATION ---
+                    notify_discord_bot(ticket.owner, f"🎉 **¡GANASTE LA LOTERÍA!**\nTu número {winning_number} ha sido premiado con ${prize_per_winner:,.2f}.")
             lottery.current_jackpot = 50000.0
 
         lottery.last_run_date = today
@@ -99,6 +132,37 @@ def get_gov_fund():
         db.session.add(fund)
         db.session.commit()
     return fund
+
+# --- API ROUTES FOR DISCORD BOT (NEW) ---
+
+@bp.route('/api/check_citizen/<dni>', methods=['GET'])
+def check_citizen_api(dni):
+    """El bot consulta esta ruta para verificar si un DNI existe."""
+    user = User.query.filter_by(dni=dni).first()
+    if user:
+        return jsonify({
+            'found': True,
+            'first_name': user.first_name,
+            'last_name': user.last_name
+        })
+    return jsonify({'found': False}), 404
+
+@bp.route('/api/link_discord', methods=['POST'])
+def link_discord_api():
+    """El bot llama a esta ruta para vincular un DNI con un ID de Discord."""
+    data = request.get_json()
+    dni = data.get('dni')
+    discord_id = data.get('discord_id')
+    
+    user = User.query.filter_by(dni=dni).first()
+    if user:
+        user.discord_id = str(discord_id)
+        db.session.commit()
+        # Notificar éxito
+        notify_discord_bot(user, f"✅ **Cuenta Vinculada**\nBienvenido, {user.first_name}. Ahora recibirás notificaciones aquí.")
+        return jsonify({'success': True})
+    
+    return jsonify({'success': False, 'message': 'Usuario no encontrado'}), 404
 
 # --- Main Routes ---
 
@@ -221,6 +285,9 @@ def pay_fine(fine_id):
     fund.balance += fine.amount
 
     db.session.commit()
+    
+    # --- DISCORD NOTIFICATION ---
+    notify_discord_bot(current_user, f"✅ **Multa Pagada**\nHas pagado exitosamente la multa de ${fine.amount:,.2f} por: {fine.reason}.")
 
     flash(f'Multa de ${fine.amount} pagada con éxito.')
     return redirect(url_for('main.my_fines'))
@@ -259,6 +326,13 @@ def book_appointment(official_id):
         )
         db.session.add(appt)
         db.session.commit()
+        
+        # --- DISCORD NOTIFICATIONS ---
+        # Al ciudadano
+        notify_discord_bot(current_user, f"📅 **Cita Solicitada**\nTu cita con el oficial {official.last_name} ha sido registrada para el {combined_dt}.")
+        # Al oficial
+        notify_discord_bot(official, f"📅 **Nueva Cita Recibida**\nEl ciudadano {current_user.first_name} {current_user.last_name} solicita cita para el {combined_dt}.\nMotivo: {form.description.data}")
+        
         flash('Cita solicitada con éxito.')
     else:
         flash('Error al solicitar la cita. Revisa los datos.')
@@ -317,7 +391,6 @@ def download_criminal_record():
             if record.subject_photos:
                 pdf.ln(5)
                 pdf.cell(200, 6, txt="Fotos del Sujeto:", ln=True)
-                y_before = pdf.get_y()
                 x_start = 10
                 for photo in record.subject_photos:
                     img_path = os.path.join(current_app.config['UPLOAD_FOLDER'], photo.filename)
@@ -334,7 +407,6 @@ def download_criminal_record():
             if record.evidence_photos:
                 pdf.ln(5)
                 pdf.cell(200, 6, txt="Evidencia:", ln=True)
-                y_before = pdf.get_y()
                 x_start = 10
                 for photo in record.evidence_photos:
                     img_path = os.path.join(current_app.config['UPLOAD_FOLDER'], photo.filename)
@@ -450,6 +522,11 @@ def banking_transfer():
             db.session.add(trans_out)
             db.session.add(trans_in)
             db.session.commit()
+            
+            # --- DISCORD NOTIFICATIONS ---
+            notify_discord_bot(current_user, f"💸 **Transferencia Enviada**\nHas enviado ${amount:,.2f} a {target_acc.owner.first_name} {target_acc.owner.last_name}.")
+            notify_discord_bot(target_acc.owner, f"💸 **Transferencia Recibida**\nHas recibido ${amount:,.2f} de {account.owner.first_name} {account.owner.last_name}.")
+            
             flash(f'Transferencia de ${amount} realizada con éxito.')
 
     return redirect(url_for('main.banking_dashboard'))
@@ -464,9 +541,9 @@ def banking_loan_apply():
             flash('Ya tienes un préstamo activo.')
         else:
             # Grant loan from Government Fund? Prompt says "se pondra o se retirara el dinero usado para prestamos" from Gov Fund.
-            fund = get_gov_fund()
             # Does fund have enough? Assuming Gov Fund can go negative or has plenty.
             # Let's say it can handle it.
+            fund = get_gov_fund()
             fund.balance -= 5500
 
             account.balance += 5500
@@ -482,6 +559,10 @@ def banking_loan_apply():
             db.session.add(loan)
             db.session.add(trans)
             db.session.commit()
+            
+            # --- DISCORD NOTIFICATION ---
+            notify_discord_bot(current_user, f"💰 **Préstamo Aprobado**\nHas recibido $5,500.00. Deberás pagar $6,000.00 en 14 días.")
+            
             flash('Préstamo de $5500 recibido. A pagar $6000.')
     return redirect(url_for('main.banking_dashboard'))
 
@@ -890,6 +971,8 @@ def government_payroll_action(req_id, action):
                         description=f'Nómina {req.department} ({req.created_at.strftime("%d/%m")})'
                     )
                     db.session.add(trans)
+                    # --- DISCORD NOTIFICATION ---
+                    notify_discord_bot(target_acc.owner, f"💰 **Nómina Recibida**\nHas recibido tu sueldo de ${item.amount:,.2f} correspondiente al departamento {req.department}.")
                     count += 1
 
         req.status = 'Approved'
@@ -1044,6 +1127,7 @@ def add_traffic_fine(user_id):
         return redirect(url_for('main.index'))
 
     form = TrafficFineForm()
+    citizen = User.query.get_or_404(user_id)
     if form.validate_on_submit():
         fine = TrafficFine(
             amount=form.amount.data,
@@ -1053,6 +1137,10 @@ def add_traffic_fine(user_id):
         )
         db.session.add(fine)
         db.session.commit()
+        
+        # --- DISCORD NOTIFICATION ---
+        notify_discord_bot(citizen, f"🚨 **Has recibido una Multa**\nMonto: ${form.amount.data:,.2f}\nRazón: {form.reason.data}\nAgente: {current_user.first_name} {current_user.last_name} ({current_user.department})")
+
         flash(f'Multa de ${form.amount.data} impuesta.')
     else:
         flash('Error al imponer multa.')
@@ -1069,7 +1157,8 @@ def add_criminal_record(user_id):
     if current_user.department not in ['Policia', 'Sheriff', 'SABES', 'Gobierno']:
          flash('No tienes permiso para agregar antecedentes penales.')
          return redirect(url_for('main.citizen_profile', user_id=user_id))
-
+    
+    citizen = User.query.get_or_404(user_id)
     form = CriminalRecordForm()
     if form.validate_on_submit():
         record = CriminalRecord(
@@ -1102,6 +1191,10 @@ def add_criminal_record(user_id):
                 db.session.add(photo)
 
         db.session.commit()
+        
+        # --- DISCORD NOTIFICATION ---
+        notify_discord_bot(citizen, f"⚖️ **Nuevo Antecedente Penal**\nDelito: {form.crime.data}\nCódigo Penal: {form.penal_code.data}\nAgente: {current_user.first_name} {current_user.last_name}")
+        
         flash('Antecedente penal registrado.')
     else:
         flash('Error en el formulario.')
@@ -1127,10 +1220,14 @@ def adjust_citizen_balance(user_id):
             citizen.bank_account.balance += amount
             desc_type = 'government_adjustment_add'
             flash(f'Se añadieron ${amount} a la cuenta.')
+            # --- DISCORD NOTIFICATION ---
+            notify_discord_bot(citizen, f"📈 **Ajuste de Saldo (Gobierno)**\nSe han AÑADIDO ${amount:,.2f} a tu cuenta.\nRazón: {form.reason.data}")
         else:
             citizen.bank_account.balance -= amount
             desc_type = 'government_adjustment_sub'
             flash(f'Se quitaron ${amount} de la cuenta.')
+            # --- DISCORD NOTIFICATION ---
+            notify_discord_bot(citizen, f"📉 **Ajuste de Saldo (Gobierno)**\nSe han RETIRADO ${amount:,.2f} de tu cuenta.\nRazón: {form.reason.data}")
 
         trans = BankTransaction(
             account_id=citizen.bank_account.id,
