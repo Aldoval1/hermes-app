@@ -108,11 +108,36 @@
         <a href="{{ url_for('main.official_dashboard') }}" style="float: left; text-decoration: none; color: #7f8c8d;">← Volver</a>
         <h1>Panel de Gobierno</h1>
 
+        <!-- Nueva visualización de Finanzas -->
+        <div class="row" style="display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 30px;">
+            <div style="flex: 1; background-color: #ecf0f1; padding: 20px; border-radius: 8px; text-align: center; border-left: 5px solid #3498db;">
+                <div style="color: #7f8c8d; font-size: 14px;">Dinero en Circulación (Total Usuarios)</div>
+                <div style="font-size: 24px; font-weight: bold; color: #2c3e50;">${{ "{:,.2f}".format(stats.total_user_money) }}</div>
+            </div>
+
+            <div style="flex: 1; background-color: #ecf0f1; padding: 20px; border-radius: 8px; text-align: center; border-left: 5px solid #e74c3c;">
+                <div style="color: #c0392b; font-size: 14px;">Deuda Total (Préstamos)</div>
+                <div style="font-size: 24px; font-weight: bold; color: #c0392b;">${{ "{:,.2f}".format(stats.total_debt) }}</div>
+            </div>
+        </div>
+
+        <div class="row" style="display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 30px;">
+            <div style="flex: 1; background-color: #ecf0f1; padding: 20px; border-radius: 8px; text-align: center; border-left: 5px solid #e74c3c;">
+                <div style="color: #c0392b; font-size: 14px;">Gastos Totales (Salarios Pagados)</div>
+                <div style="font-size: 24px; font-weight: bold; color: #c0392b;">${{ "{:,.2f}".format(stats.total_expenses) }}</div>
+            </div>
+
+            <div style="flex: 1; background-color: #ecf0f1; padding: 20px; border-radius: 8px; text-align: center; border-left: 5px solid {% if stats.net_benefits >= 0 %}#27ae60{% else %}#e74c3c{% endif %};">
+                <div style="color: {% if stats.net_benefits >= 0 %}#27ae60{% else %}#e74c3c{% endif %}; font-size: 14px;">Beneficio Neto del Estado</div>
+                <div style="font-size: 24px; font-weight: bold; color: {% if stats.net_benefits >= 0 %}#27ae60{% else %}#e74c3c{% endif %};">${{ "{:,.2f}".format(stats.net_benefits) }}</div>
+            </div>
+        </div>
+
         <div class="fund-display">
-            <div>Fondos del Gobierno</div>
+            <div>Reserva Estatal / Tesoro (Editable)</div>
             <div class="fund-amount">${{ "{:,.2f}".format(fund.balance) }}</div>
             <div class="fund-actions">
-                <button class="btn btn-edit" onclick="openModal('fundModal')">Ajustar Fondos</button>
+                <button class="btn btn-edit" onclick="openModal('fundModal')">Editar Reserva</button>
             </div>
         </div>
 

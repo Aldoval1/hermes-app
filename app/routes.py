@@ -28,6 +28,17 @@ import io
 
 bp = Blueprint('main', __name__)
 
+# --- Configuración de Licencias ---
+LICENSE_TYPES = {
+    'piloto': {'name': 'Licencia de Piloto', 'price': 10000},
+    'funcionamiento': {'name': 'Licencia de Funcionamiento', 'price': 4000},
+    'alcohol_tabaco': {'name': 'Licencia para Venta de Alcohol y Tabaco', 'price': 3000},
+    'drogas_farmacas': {'name': 'Licencia para Venta de Drogas Fármacas', 'price': 2500},
+    'reparacion_vehiculos': {'name': 'Licencia para Reparación y Renovación de Vehículos', 'price': 3500},
+    'especiales': {'name': 'Licencias Especiales', 'price': 3000},
+    'stripping': {'name': 'Licencia de Stripping', 'price': 3000}
+}
+
 # --- Helper Functions ---
 
 # --- DISCORD INTEGRATION START ---
@@ -234,6 +245,95 @@ def register():
 def logout():
     logout_user()
     return redirect(url_for('main.index'))
+
+# --- Licenses Routes ---
+
+@bp.route('/licenses')
+@login_required
+def licenses():
+    if current_user.badge_id:
+        return redirect(url_for('main.official_dashboard'))
+
+    # Active licenses
+    active_licenses = [
+        l for l in current_user.licenses
+        if l.status == 'Activa' and (l.expiration_date is None or l.expiration_date >= datetime.utcnow().date())
+    ]
+
+    # Calculate days remaining for display
+    now = datetime.utcnow().date()
+    for l in active_licenses:
+        if l.expiration_date:
+            l.days_remaining = (l.expiration_date - now).days
+        else:
+            l.days_remaining = 'N/A'
+
+    return render_template('licenses.html', license_types=LICENSE_TYPES, active_licenses=active_licenses)
+
+@bp.route('/licenses/buy/<type_key>', methods=['POST'])
+@login_required
+def buy_license(type_key):
+    if type_key not in LICENSE_TYPES:
+        flash('Tipo de licencia inválido.')
+        return redirect(url_for('main.licenses'))
+
+    license_info = LICENSE_TYPES[type_key]
+    price = license_info['price']
+    account = current_user.bank_account
+
+    if not account:
+        flash('Necesitas una cuenta bancaria para comprar licencias.')
+        return redirect(url_for('main.licenses'))
+
+    if account.balance < price:
+        flash('Fondos insuficientes.')
+        return redirect(url_for('main.licenses'))
+
+    # Check if already has valid license of this type
+    existing = License.query.filter_by(
+        user_id=current_user.id,
+        type=license_info['name'],
+        status='Activa'
+    ).first()
+
+    if existing and existing.expiration_date and existing.expiration_date >= datetime.utcnow().date():
+         flash('Ya tienes esta licencia activa.')
+         return redirect(url_for('main.licenses'))
+
+    # Deduct Money
+    account.balance -= price
+
+    # Add to Government Income (Optional tracking, user said "Net Benefits" needs to be tracked)
+    # We will assume GovernmentFund tracks the "State Reserve" or "Net Income"
+    fund = get_gov_fund()
+    fund.balance += price
+
+    # Create Transaction
+    trans = BankTransaction(
+        account_id=account.id,
+        type='license_buy',
+        amount=price,
+        description=f'Compra: {license_info["name"]}'
+    )
+
+    # Create License
+    expiration = datetime.utcnow().date() + timedelta(days=30)
+    new_license = License(
+        type=license_info['name'],
+        status='Activa',
+        expiration_date=expiration,
+        user_id=current_user.id
+    )
+
+    db.session.add(trans)
+    db.session.add(new_license)
+    db.session.commit()
+
+    # --- DISCORD NOTIFICATION ---
+    notify_discord_bot(current_user, f"📄 **Licencia Adquirida**\nHas comprado la {license_info['name']} por ${price:,.2f}.\nVence en 30 días.")
+
+    flash(f'Has comprado la {license_info["name"]} por ${price}.')
+    return redirect(url_for('main.licenses'))
 
 # --- Citizen Fines Routes ---
 
@@ -864,7 +964,50 @@ def government_dashboard():
     fund_form = GovFundAdjustForm()
     create_leader_form = CreateLeaderForm()
 
-    return render_template('government_dashboard.html', fund=fund, pending_payrolls=pending_payrolls, fund_form=fund_form, create_leader_form=create_leader_form)
+    # --- Financial Stats Calculation ---
+
+    # 1. Total User Money
+    # We sum all bank balances.
+    # Note: Using db.session.query for efficiency if possible, or python sum.
+    # Python sum for simplicity given scale.
+    all_accounts = BankAccount.query.all()
+    total_user_money = sum(acc.balance for acc in all_accounts)
+
+    # 2. Total Debt
+    all_loans = BankLoan.query.filter_by(status='Active').all()
+    total_debt = sum(loan.amount_due for loan in all_loans)
+
+    # 3. Expenses (Salaries) & Benefits (Income)
+    # We look at BankTransactions.
+    # Income Types (for state): 'fine_payment', 'license_buy', 'loan_fee' (maybe?), 'loan_payment' (interest part? or principal? Principal goes back to fund).
+    # Expense Types (for state): 'salary', 'loan_received' (money leaving fund).
+
+    # Let's define:
+    # Income = Fines + Licenses + Taxes (if any)
+    # Expenses = Salaries
+
+    # We query ALL time or just current period? Prompt implies "breakdown of how money is organized... expenses... net benefits".
+    # Usually "Net Benefit" implies a P&L (Profit & Loss) over time or total. I'll use total historical sum.
+
+    income_transactions = BankTransaction.query.filter(
+        BankTransaction.type.in_(['fine_payment', 'license_buy'])
+    ).all()
+    total_income = sum(t.amount for t in income_transactions)
+
+    expense_transactions = BankTransaction.query.filter_by(type='salary').all()
+    total_expenses = sum(t.amount for t in expense_transactions)
+
+    net_benefits = total_income - total_expenses
+
+    stats = {
+        'total_user_money': total_user_money,
+        'total_debt': total_debt,
+        'total_expenses': total_expenses,
+        'net_benefits': net_benefits
+    }
+
+    return render_template('government_dashboard.html', fund=fund, pending_payrolls=pending_payrolls,
+                           fund_form=fund_form, create_leader_form=create_leader_form, stats=stats)
 
 @bp.route('/government/create_leader', methods=['POST'])
 @login_required
@@ -945,11 +1088,20 @@ def government_payroll_action(req_id, action):
 
     if action == 'approve':
         fund = get_gov_fund()
-        if fund.balance < req.total_amount:
-            flash('Fondos insuficientes en el gobierno para pagar esta nómina.', 'error')
-            return redirect(url_for('main.government_dashboard'))
+        # Removed insufficient funds check as requested.
+        # Government fund balance is now treated as a reserve/tracker, not a hard limit for salaries.
 
-        fund.balance -= req.total_amount
+        # We assume salary payments come from the "State" (Minted or Debt), but we still track it.
+        # If user wants to "desglosar" (breakdown) expenses, we should still deduct it from the fund
+        # to keep the "Reserva Estatal" accurate if it represents the treasury.
+        # BUT the prompt said "En vez de descontar dinero ... quiero que se desglose".
+        # This implies: Do NOT deduct from the balance number that is displayed as "Total Money".
+        # However, we have a "Reserva Estatal / Tesoro (Editable)" in the new dashboard.
+        # If I don't deduct, where does the money come from? Thin air (Inflation).
+        # And the "Gastos Totales" stat tracks it.
+        # So I will NOT deduct from `fund.balance`.
+
+        # fund.balance -= req.total_amount  <-- REMOVED
 
         # Distribute
         count = 0
