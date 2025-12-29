@@ -153,10 +153,18 @@ class AdjustBalanceForm(FlaskForm):
     submit = SubmitField('Aplicar Ajuste')
 
 class GovFundAdjustForm(FlaskForm):
-    amount = FloatField('Cantidad', validators=[DataRequired(), NumberRange(min=0.01)])
-    operation = SelectField('Operación', choices=[('add', 'Ingresar Fondos'), ('subtract', 'Retirar Fondos')], validators=[DataRequired()])
-    reason = StringField('Motivo', validators=[DataRequired()])
-    submit = SubmitField('Ajustar Fondo')
+    # Field to edit the "Net Benefits" value directly
+    net_benefits = FloatField('Beneficios Netos (Editable)', validators=[NumberRange()])
+
+    # Field to edit description of expenses
+    expenses_description = StringField('Descripción de Gastos (Desglose)', validators=[Length(max=255)])
+
+    # Existing fields for Balance Adjustment (Reserva Estatal)
+    amount = FloatField('Ajustar Reserva (Cantidad)', validators=[NumberRange(min=0.0)])
+    operation = SelectField('Operación Reserva', choices=[('none', 'Sin Cambios'), ('add', 'Ingresar a Reserva'), ('subtract', 'Retirar de Reserva')], default='none')
+    reason = StringField('Motivo del Ajuste', validators=[])
+
+    submit = SubmitField('Guardar Cambios')
 
 class SalaryForm(FlaskForm):
     salary = FloatField('Salario', validators=[DataRequired(), NumberRange(min=0)])

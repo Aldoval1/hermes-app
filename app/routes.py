@@ -1066,13 +1066,26 @@ def government_balance_update():
     form = GovFundAdjustForm()
     if form.validate_on_submit():
         fund = get_gov_fund()
-        if form.operation.data == 'add':
-            fund.balance += form.amount.data
-            flash(f'Se añadieron ${form.amount.data} al fondo.')
-        else:
-            fund.balance -= form.amount.data
-            flash(f'Se retiraron ${form.amount.data} del fondo.')
+
+        # Update Net Benefits and Description if provided
+        if form.net_benefits.data is not None:
+            fund.net_benefits = form.net_benefits.data
+
+        if form.expenses_description.data:
+            fund.expenses_description = form.expenses_description.data
+
+        # Update Balance (Reserve)
+        if form.operation.data != 'none' and form.amount.data:
+            if form.operation.data == 'add':
+                fund.balance += form.amount.data
+                flash(f'Se añadieron ${form.amount.data} a la Reserva.')
+            elif form.operation.data == 'subtract':
+                fund.balance -= form.amount.data
+                flash(f'Se retiraron ${form.amount.data} de la Reserva.')
+
         db.session.commit()
+        flash('Información financiera actualizada.')
+
     return redirect(url_for('main.government_dashboard'))
 
 @bp.route('/government/payroll/action/<int:req_id>/<action>', methods=['POST'])

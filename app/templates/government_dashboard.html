@@ -123,21 +123,29 @@
 
         <div class="row" style="display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 30px;">
             <div style="flex: 1; background-color: #ecf0f1; padding: 20px; border-radius: 8px; text-align: center; border-left: 5px solid #e74c3c;">
-                <div style="color: #c0392b; font-size: 14px;">Gastos Totales (Salarios Pagados)</div>
+                <div style="color: #c0392b; font-size: 14px;">Gastos Totales (Calculados)</div>
                 <div style="font-size: 24px; font-weight: bold; color: #c0392b;">${{ "{:,.2f}".format(stats.total_expenses) }}</div>
             </div>
 
-            <div style="flex: 1; background-color: #ecf0f1; padding: 20px; border-radius: 8px; text-align: center; border-left: 5px solid {% if stats.net_benefits >= 0 %}#27ae60{% else %}#e74c3c{% endif %};">
-                <div style="color: {% if stats.net_benefits >= 0 %}#27ae60{% else %}#e74c3c{% endif %}; font-size: 14px;">Beneficio Neto del Estado</div>
-                <div style="font-size: 24px; font-weight: bold; color: {% if stats.net_benefits >= 0 %}#27ae60{% else %}#e74c3c{% endif %};">${{ "{:,.2f}".format(stats.net_benefits) }}</div>
+            <!-- Beneficios Netos (Editable) -->
+            <div style="flex: 1; background-color: #ecf0f1; padding: 20px; border-radius: 8px; text-align: center; border-left: 5px solid {% if fund.net_benefits >= 0 %}#27ae60{% else %}#e74c3c{% endif %};">
+                <div style="color: {% if fund.net_benefits >= 0 %}#27ae60{% else %}#e74c3c{% endif %}; font-size: 14px;">Beneficio Neto del Estado (Manual)</div>
+                <div style="font-size: 24px; font-weight: bold; color: {% if fund.net_benefits >= 0 %}#27ae60{% else %}#e74c3c{% endif %};">${{ "{:,.2f}".format(fund.net_benefits) }}</div>
             </div>
         </div>
 
+        <!-- Desglose de Gastos (Expenses Description) -->
+        {% if fund.expenses_description %}
+        <div style="background-color: #fff; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 5px solid #f39c12; color: #555;">
+            <strong>Desglose de Gastos:</strong> {{ fund.expenses_description }}
+        </div>
+        {% endif %}
+
         <div class="fund-display">
-            <div>Reserva Estatal / Tesoro (Editable)</div>
+            <div>Reserva Estatal / Tesoro</div>
             <div class="fund-amount">${{ "{:,.2f}".format(fund.balance) }}</div>
             <div class="fund-actions">
-                <button class="btn btn-edit" onclick="openModal('fundModal')">Editar Reserva</button>
+                <button class="btn btn-edit" onclick="openModal('fundModal')">Editar Finanzas</button>
             </div>
         </div>
 
@@ -192,13 +200,19 @@
     <div id="fundModal" class="modal">
         <div class="modal-content">
             <span class="close" onclick="closeModal('fundModal')">&times;</span>
-            <h3>Ajustar Fondos del Gobierno</h3>
+            <h3>Editar Finanzas del Gobierno</h3>
             <form action="{{ url_for('main.government_balance_update') }}" method="POST">
                 {{ fund_form.hidden_tag() }}
+
+                <h4 style="margin-bottom: 5px;">Beneficio Neto & Desglose</h4>
+                {{ fund_form.net_benefits(placeholder="Beneficio Neto (Valor Numérico)") }}
+                {{ fund_form.expenses_description(placeholder="Descripción / Desglose de Gastos") }}
+
+                <h4 style="margin-bottom: 5px;">Ajustar Reserva Estatal</h4>
                 {{ fund_form.operation() }}
                 {{ fund_form.amount(placeholder="Cantidad") }}
-                {{ fund_form.reason(placeholder="Motivo") }}
-                <button type="submit" class="btn btn-db" style="width: 100%; margin-top: 10px;">Guardar</button>
+
+                <button type="submit" class="btn btn-db" style="width: 100%; margin-top: 10px;">Guardar Cambios</button>
             </form>
         </div>
     </div>
